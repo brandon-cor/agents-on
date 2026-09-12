@@ -11,5 +11,17 @@ chmod +x "$work/.local/bin/agents"
 actual=$(HOME="$work" zsh -f -c 'source "$1"; sleep on; sleep off; sleep status; sleep 0' _ "$PWD/scripts/shell.sh")
 [[ "$actual" == $'stub:on\nstub:off\nstub:status' ]]
 echo 'Shell forwarding and numeric sleep verified.'
+# cover fresh macOS accounts, explicit on/off, and unexpected command output.
+printf 'import Cocoa\n' > "$work/state-check.swift"
+sed -n '/^func parseSleepDisabled/,/^}/p' Sources/main.swift >> "$work/state-check.swift"
+cat >> "$work/state-check.swift" <<'SWIFT'
+precondition(parseSleepDisabled("System-wide power settings:\nCurrently in use:\n sleep 1") == false)
+precondition(parseSleepDisabled("SleepDisabled 1\nCurrently in use:") == true)
+precondition(parseSleepDisabled("SleepDisabled 0\nCurrently in use:") == false)
+precondition(parseSleepDisabled("unrecognized output") == nil)
+print("Fresh-account and explicit sleep states verified.")
+SWIFT
+/usr/bin/swiftc -target "$(uname -m)-apple-macos14.0" "$work/state-check.swift" -o "$work/state-check" -framework Cocoa
+"$work/state-check"
 bash scripts/build.sh
 bash install.sh --check-only --archive-dir "$PWD/dist"
