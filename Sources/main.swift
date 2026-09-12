@@ -1,6 +1,17 @@
 import Cocoa
 import Darwin
 
+func parseSleepDisabled(_ output: String) -> Bool? {
+    for line in output.split(separator: "\n") {
+        let parts = line.split(whereSeparator: { $0.isWhitespace })
+        if parts.first == "SleepDisabled", parts.count > 1 {
+            return parts[1] == "1"
+        }
+    }
+    // macOS omits SleepDisabled until someone explicitly configures it.
+    return output.contains("Currently in use:") ? false : nil
+}
+
 func sleepDisabled() -> Bool? {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
@@ -12,13 +23,7 @@ func sleepDisabled() -> Bool? {
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     p.waitUntilExit()
     guard p.terminationStatus == 0, let output = String(data: data, encoding: .utf8) else { return nil }
-    for line in output.split(separator: "\n") {
-        let parts = line.split(whereSeparator: { $0.isWhitespace })
-        if parts.first == "SleepDisabled", parts.count > 1 {
-            return parts[1] == "1"
-        }
-    }
-    return nil
+    return parseSleepDisabled(output)
 }
 
 // own only our caffeinate process; -w releases its assertions if this app exits.

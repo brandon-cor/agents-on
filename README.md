@@ -13,7 +13,7 @@ For **macOS 14 or newer**, on Apple Silicon or Intel. You need an administrator 
 Paste this into Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.1.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.1.1/install.sh | bash
 ```
 
 Enter your Mac password once when asked. Typing a password in Terminal does not display characters. The app starts immediately and automatically at login. Your existing sleep setting is preserved.
