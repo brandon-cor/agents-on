@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-version="${1:-0.1.1}"
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use a version such as 0.1.1' >&2; exit 2; }
+version="${1:-0.1.2}"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use a version such as 0.1.2' >&2; exit 2; }
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 package="$work/Agents-On"
@@ -28,7 +28,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 /usr/bin/codesign --force --sign - "$app"
-cp scripts/agents scripts/shell.sh scripts/uninstall.sh "$package/"
+cp scripts/agents scripts/shell.sh scripts/uninstall.sh scripts/start.sh scripts/doctor.sh "$package/"
 cp README.md LICENSE "$package/"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$package" dist/Agents-On-macOS.zip
 (cd dist && /usr/bin/shasum -a 256 Agents-On-macOS.zip > SHA256SUMS)

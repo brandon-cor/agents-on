@@ -1,9 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 app="$HOME/Applications/Agents On.app/Contents/MacOS/AgentsOn"
-label="io.github.brandon-cor.agents-on"
 if [[ $# != 1 ]]; then
-  echo 'Usage: agents on | agents off | agents status' >&2
+  echo 'Usage: agents on | agents off | agents status | agents show | agents doctor' >&2
   exit 2
 fi
 case "$1" in
@@ -14,12 +13,16 @@ case "$1" in
       echo 'Run the Agents On installer to enable password-free toggling.' >&2
       exit 1
     fi
-    /bin/launchctl kickstart "gui/$(id -u)/$label"
+    /bin/bash "$HOME/Library/Application Support/Agents On/start.sh" >/dev/null
     "$app" --refresh
     actual=$(/usr/bin/pmset -g | /usr/bin/awk '$1 == "SleepDisabled" {print $2}')
     [[ "$actual" == "$value" ]] || { echo 'Could not verify the sleep setting.' >&2; exit 1; }
     echo "agents $1"
     ;;
   status) "$app" --status ;;
-  *) echo 'Usage: agents on | agents off | agents status' >&2; exit 2 ;;
+  show)
+    /bin/bash "$HOME/Library/Application Support/Agents On/start.sh" >/dev/null
+    "$app" --show ;;
+  doctor) /bin/bash "$HOME/Library/Application Support/Agents On/doctor.sh" ;;
+  *) echo 'Usage: agents on | agents off | agents status | agents show | agents doctor' >&2; exit 2 ;;
 esac

@@ -13,12 +13,36 @@ For **macOS 14 or newer**, on Apple Silicon or Intel. You need an administrator 
 Paste this into Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.1.1/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.1.2/install.sh | bash
 ```
 
 Enter your Mac password once when asked. Typing a password in Terminal does not display characters. The app starts immediately and automatically at login. Your existing sleep setting is preserved.
 
 You can [read the installer](install.sh) first, or [download the release](https://github.com/brandon-cor/agents-on/releases/latest). The installer downloads the app, verifies its SHA-256 checksum and ad-hoc code signature, and installs it in `~/Applications/Agents On.app`. The release is **not Apple-notarized**; browser-downloaded copies may be blocked by Gatekeeper. The installer does not remove quarantine flags or disable Gatekeeper.
+
+## Missing the menu bar icon? (v0.1.2)
+
+Re-run the install command above to update and repair startup. The installer now waits for a response **from the running AppKit app** confirming that its menu bar button exists, instead of treating a registered login job as success. It also re-enables a previously disabled login job and opens a small setup window after the check succeeds.
+
+For an existing installation, open a new terminal and run:
+
+```bash
+agents show
+```
+
+This starts the app if needed, restores its menu bar item, and opens visibility options. If your menu bar is crowded or has a camera notch, enable **Compact light only**. The default still shows the green/gray light and “agents on/off”; compact mode shows the same clickable light with the label available to accessibility tools and on hover. Check any menu bar manager you use, and move the pointer to the top edge if the bar auto-hides.
+
+If it still does not appear:
+
+```bash
+agents doctor
+```
+
+Share that output in a [GitHub issue](https://github.com/brandon-cor/agents-on/issues). It reports your macOS version, app version, login-job state, the app's live menu-item response, and recent app startup errors. It does not change sleep settings.
+
+An AppKit response proves that the item was created, **not that macOS has room to show it**. [Apple documents that `isVisible` can remain true when an item is hidden due to insufficient menu bar space](https://developer.apple.com/documentation/appkit/nsstatusitem/isvisible).
+
+Opening the ZIP is not the full installation: the Terminal installer also sets up login startup, commands, and the two-command permission rule.
 
 ## Use
 

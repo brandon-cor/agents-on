@@ -51,14 +51,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var busy = false
     var current: Bool?
     let caffeine = CaffeineSession()
+    var helpWindow: NSWindow?
+    var compact = UserDefaults.standard.bool(forKey: "compactIndicator")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.autosaveName = "agents-on-indicator"
+        statusItem.isVisible = true
         statusItem.button?.target = self
         statusItem.button?.action = #selector(toggle)
         statusItem.button?.sendAction(on: [.leftMouseUp])
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(requestRefresh), name: Notification.Name("io.github.brandon-cor.agents-on.refresh"), object: nil)
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(uiRequest(_:)), name: Notification.Name("io.github.brandon-cor.agents-on.ui-request"), object: nil)
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.refresh() }
     }
@@ -83,7 +88,75 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         light.isTemplate = false
         statusItem.button?.image = light
         statusItem.button?.imagePosition = .imageLeft
-        statusItem.button?.title = enabled == nil ? "agents ?" : (active ? "agents on" : "agents off")
+        statusItem.button?.title = compact ? "" : (enabled == nil ? "agents ?" : (active ? "agents on" : "agents off"))
+        statusItem.button?.setAccessibilityLabel(enabled == true ? "agents on" : "agents off")
+    }
+
+    @objc func uiRequest(_ notification: Notification) {
+        guard let requestID = notification.object as? String else { return }
+        if notification.userInfo?["show"] as? Bool == true {
+            statusItem.isVisible = true
+            showHelp()
+        }
+        refresh()
+        let frame = statusItem.button?.window?.frame ?? .zero
+        let onScreen = !frame.isEmpty && NSScreen.screens.contains { $0.frame.intersects(frame) }
+        let response: [String: Any] = [
+            "requestID": requestID,
+            "pid": ProcessInfo.processInfo.processIdentifier,
+            "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
+            "itemCreated": statusItem.button != nil,
+            "itemEnabled": statusItem.isVisible,
+            "frameOnScreen": onScreen,
+            "label": statusItem.button?.title ?? "",
+            "compact": compact,
+            "caffeinateRunning": caffeine.isRunning
+        ]
+        do {
+            let data = try JSONSerialization.data(withJSONObject: response, options: [.sortedKeys])
+            try data.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Library/Application Support/Agents On/ui-status.json"), options: .atomic)
+        } catch { fputs("Unable to write UI status: \(error)\n", stderr) }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        statusItem.isVisible = true
+        showHelp()
+        return true
+    }
+
+    @objc func changeCompact(_ sender: NSButton) {
+        compact = sender.state == .on
+        UserDefaults.standard.set(compact, forKey: "compactIndicator")
+        refresh()
+    }
+
+    func showHelp() {
+        if let window = helpWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 280), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = "Agents On"
+        window.isReleasedWhenClosed = false
+        let heading = NSTextField(labelWithString: "Your menu bar toggle is running")
+        heading.font = .boldSystemFont(ofSize: 21)
+        heading.frame = NSRect(x: 24, y: 223, width: 452, height: 30)
+        let body = NSTextField(wrappingLabelWithString: "Look near the clock for the green or gray light and ‘agents on’ / ‘agents off’. Click it once to toggle.\n\nIf it is missing, move your pointer to the top edge and check any menu bar manager. On a crowded menu bar, try the compact light below. Hold Command and drag the light to reposition it.")
+        body.font = .systemFont(ofSize: 14)
+        body.frame = NSRect(x: 24, y: 88, width: 452, height: 127)
+        let checkbox = NSButton(checkboxWithTitle: "Compact light only (fits a crowded menu bar)", target: self, action: #selector(changeCompact(_:)))
+        checkbox.state = compact ? .on : .off
+        checkbox.frame = NSRect(x: 24, y: 48, width: 452, height: 28)
+        let footer = NSTextField(labelWithString: "No icon yet? Run agents doctor and share its output.")
+        footer.font = .systemFont(ofSize: 12)
+        footer.textColor = .secondaryLabelColor
+        footer.frame = NSRect(x: 24, y: 17, width: 452, height: 20)
+        for view in [heading, body, checkbox, footer] { window.contentView?.addSubview(view) }
+        helpWindow = window
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc func requestRefresh() { refresh() }
@@ -156,6 +229,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+// a live request/response checks AppKit startup, not just launchd registration.
+if CommandLine.arguments.contains("--check-ui") || CommandLine.arguments.contains("--show") {
+    let requestID = UUID().uuidString
+    let show = CommandLine.arguments.contains("--show")
+    let responseURL = URL(fileURLWithPath: NSHomeDirectory() + "/Library/Application Support/Agents On/ui-status.json")
+    let expectedVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+    for _ in 0..<20 {
+        DistributedNotificationCenter.default().postNotificationName(Notification.Name("io.github.brandon-cor.agents-on.ui-request"), object: requestID, userInfo: ["show": show], deliverImmediately: true)
+        Thread.sleep(forTimeInterval: 0.4)
+        if let data = try? Data(contentsOf: responseURL),
+           let response = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           response["requestID"] as? String == requestID,
+           let pid = response["pid"] as? Int32, kill(pid, 0) == 0 {
+            print(String(data: data, encoding: .utf8) ?? "")
+            let ready = response["itemCreated"] as? Bool == true && response["itemEnabled"] as? Bool == true && response["version"] as? String == expectedVersion
+            exit(ready ? 0 : 1)
+        }
+    }
+    fputs("The menu bar app did not respond. Run agents doctor for startup details.\n", stderr)
+    exit(1)
+}
 if CommandLine.arguments.contains("--refresh") {
     DistributedNotificationCenter.default().postNotificationName(Notification.Name("io.github.brandon-cor.agents-on.refresh"), object: nil, userInfo: nil, deliverImmediately: true)
     exit(0)

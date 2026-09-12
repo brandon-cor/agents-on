@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-version=0.1.1
+version=0.1.2
 base="https://github.com/brandon-cor/agents-on/releases/download/v$version"
 check_only=0
 archive_dir=''
@@ -29,7 +29,7 @@ package="$work/unpacked/Agents-On"
 app="$package/Agents On.app"
 /usr/bin/codesign --verify --deep --strict "$app"
 "$app/Contents/MacOS/AgentsOn" --status
-for file in agents shell.sh uninstall.sh; do
+for file in agents shell.sh uninstall.sh start.sh doctor.sh; do
   [[ -f "$package/$file" ]] || { echo "Missing package file: $file" >&2; exit 1; }
 done
 if (( check_only )); then
@@ -71,10 +71,13 @@ fi
 install -m 755 "$package/agents" "$HOME/.local/bin/agents"
 install -m 644 "$package/shell.sh" "$support/shell.sh"
 install -m 755 "$package/uninstall.sh" "$support/uninstall.sh"
+install -m 755 "$package/start.sh" "$support/start.sh"
+install -m 755 "$package/doctor.sh" "$support/doctor.sh"
 /usr/bin/plutil -create xml1 "$new_plist"
 /usr/bin/plutil -insert Label -string "$label" "$new_plist"
 /usr/bin/plutil -insert ProgramArguments -json '[]' "$new_plist"
 /usr/bin/plutil -insert ProgramArguments.0 -string "$target/Contents/MacOS/AgentsOn" "$new_plist"
+/usr/bin/plutil -insert ProcessType -string Interactive "$new_plist"
 /usr/bin/plutil -insert RunAtLoad -bool true "$new_plist"
 /usr/bin/plutil -insert KeepAlive -json '{"SuccessfulExit":false}' "$new_plist"
 /usr/bin/plutil -insert ThrottleInterval -integer 10 "$new_plist"
@@ -88,10 +91,15 @@ if ! /usr/bin/grep -Fqx "$line" "$HOME/.zshrc"; then
   cp "$HOME/.zshrc" "$support/zshrc-before-install"
   printf '\n%s\n' "$line" >> "$HOME/.zshrc"
 fi
-/bin/launchctl bootstrap "gui/$user_id" "$plist"
-/bin/launchctl print "gui/$user_id/$label" >/dev/null
+if ! /bin/bash "$support/start.sh"; then
+  echo 'Files installed, but menu bar startup could not be verified. This is not a completed setup.' >&2
+  /bin/bash "$support/doctor.sh" >&2 || true
+  exit 1
+fi
 # listing permissions verifies setup without changing the user's sleep state.
 /usr/bin/sudo -n -l /usr/bin/pmset -a disablesleep 1 >/dev/null
 /usr/bin/sudo -n -l /usr/bin/pmset -a disablesleep 0 >/dev/null
-echo 'Installed! Click agents on/off in your menu bar. Open a new terminal for sleep on/off.'
+"$target/Contents/MacOS/AgentsOn" --show >/dev/null
+echo 'Installed: the app responded and created its menu bar item. Open a new terminal for sleep on/off.'
+echo 'If the light is hidden, run agents show and try the compact indicator.'
 echo 'Your existing sleep setting was preserved.'

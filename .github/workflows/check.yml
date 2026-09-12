@@ -8,6 +8,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash scripts/check.sh
+      - run: bash scripts/check-gui.sh
       - uses: actions/upload-artifact@v4
         with:
           name: Agents-On-macOS
