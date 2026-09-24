@@ -50,8 +50,42 @@ func durationSeconds(_ text: String) -> Double? {
     return minutes * 60
 }
 
+func durationLabel(_ seconds: Double) -> String {
+    let minutes = max(1, Int(ceil(seconds / 60)))
+    let hours = minutes / 60
+    let remainder = minutes % 60
+    return [hours > 0 ? "\(hours)H" : "", remainder > 0 ? "\(remainder)M" : ""].filter { !$0.isEmpty }.joined(separator: " ")
+}
+
+// separate buttons keep the power hit area independent of the timer menu.
+class IndicatorButton: NSButton {
+    var menuOpen = false { didSet { needsDisplay = true } }
+    override func draw(_ dirtyRect: NSRect) {
+        let pressed = cell?.isHighlighted == true || menuOpen
+        if pressed {
+            NSColor.labelColor.withAlphaComponent(0.18).setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5).fill()
+        }
+        NSGraphicsContext.saveGraphicsState()
+        if pressed {
+            let transform = AffineTransform(translationByX: 0, byY: -1)
+            (transform as NSAffineTransform).concat()
+        }
+        super.draw(dirtyRect)
+        NSGraphicsContext.restoreGraphicsState()
+    }
+    override func rightMouseDown(with event: NSEvent) {}
+    override func rightMouseUp(with event: NSEvent) {}
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
+    let powerButton = IndicatorButton()
+    let textButton = IndicatorButton()
+    var selectedDuration: Double? {
+        get { UserDefaults.standard.object(forKey: "awakeDuration") as? Double }
+        set { UserDefaults.standard.set(newValue, forKey: "awakeDuration") }
+    }
     var timer: Timer?
     var busy = false
     var deadline: Date? {
@@ -70,9 +104,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.autosaveName = "agents-on-indicator"
         statusItem.isVisible = true
-        statusItem.button?.target = self
-        statusItem.button?.action = #selector(indicatorClick)
-        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        for button in [powerButton, textButton] {
+            button.isBordered = false
+            button.setButtonType(.momentaryChange)
+            button.font = .menuBarFont(ofSize: 0)
+            button.target = self
+            button.sendAction(on: [.leftMouseUp])
+            statusItem.button?.addSubview(button)
+        }
+        powerButton.action = #selector(toggle)
+        textButton.action = #selector(showTimers(_:))
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(requestRefresh(_:)), name: Notification.Name("io.github.brandon-cor.agents-on.refresh"), object: nil)
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(uiRequest(_:)), name: Notification.Name("io.github.brandon-cor.agents-on.ui-request"), object: nil)
         refresh()
@@ -82,26 +123,40 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func setIndicator(enabled: Bool?) {
         let active = enabled == true
-        let light = NSImage(size: NSSize(width: 16, height: 18), flipped: false) { _ in
+        let light = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
             if active {
-                NSColor(srgbRed: 0.1, green: 1.0, blue: 0.25, alpha: 0.15).setFill()
-                NSBezierPath(ovalIn: NSRect(x: 1, y: 2, width: 14, height: 14)).fill()
-                NSColor(srgbRed: 0.1, green: 1.0, blue: 0.25, alpha: 0.3).setFill()
-                NSBezierPath(ovalIn: NSRect(x: 2, y: 3, width: 12, height: 12)).fill()
+                NSColor(srgbRed: 0.1, green: 1, blue: 0.25, alpha: 0.18).setFill()
+                NSBezierPath(ovalIn: NSRect(x: 0, y: 0, width: 18, height: 18)).fill()
             }
-            let circle = NSBezierPath(ovalIn: NSRect(x: 3, y: 4, width: 10, height: 10))
-            (active ? NSColor(srgbRed: 0.15, green: 1.0, blue: 0.3, alpha: 1) : NSColor.white.withAlphaComponent(0.45)).setFill()
-            circle.fill()
-            NSColor.black.withAlphaComponent(0.2).setStroke()
-            circle.lineWidth = 0.5
-            circle.stroke()
+            (active ? NSColor(srgbRed: 0.15, green: 1, blue: 0.3, alpha: 1) : NSColor.labelColor.withAlphaComponent(0.5)).setStroke()
+            let glyph = NSBezierPath()
+            glyph.lineWidth = 1.8
+            glyph.lineCapStyle = .round
+            glyph.appendArc(withCenter: NSPoint(x: 9, y: 8), radius: 5.5, startAngle: 55, endAngle: 125, clockwise: true)
+            glyph.move(to: NSPoint(x: 9, y: 9))
+            glyph.line(to: NSPoint(x: 9, y: 15))
+            glyph.stroke()
             return true
         }
         light.isTemplate = false
-        statusItem.button?.image = light
-        statusItem.button?.imagePosition = .imageLeft
-        statusItem.button?.title = compact ? "" : (enabled == nil ? "agents ?" : (active ? "agents on" : "agents off"))
-        statusItem.button?.setAccessibilityLabel(enabled == true ? "agents on" : "agents off")
+        powerButton.image = light
+        powerButton.title = ""
+        powerButton.setAccessibilityLabel(active ? "Turn agents off" : "Turn agents on indefinitely")
+        powerButton.toolTip = active ? "Turn agents off" : "Turn agents on indefinitely"
+        var label = enabled == nil ? "Agents ?" : (active ? "Agents On" : "Agents Off")
+        if active, let end = deadline {
+            label += "-" + durationLabel(selectedDuration ?? max(1, end.timeIntervalSinceNow))
+        }
+        if expiryFailed || (active && !caffeine.isRunning) { label += " !" }
+        textButton.title = label
+        textButton.setAccessibilityLabel(label + ", timer options")
+        textButton.toolTip = "Choose a keep-awake duration"
+        let height = NSStatusBar.system.thickness
+        let width = ceil((label as NSString).size(withAttributes: [.font: textButton.font!]).width) + 16
+        statusItem.length = 28 + (compact ? 0 : width)
+        powerButton.frame = NSRect(x: 0, y: 0, width: 28, height: height)
+        textButton.frame = NSRect(x: 28, y: 0, width: width, height: height)
+        textButton.isHidden = compact
     }
 
     @objc func uiRequest(_ notification: Notification) {
@@ -120,7 +175,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "itemCreated": statusItem.button != nil,
             "itemEnabled": statusItem.isVisible,
             "frameOnScreen": onScreen,
-            "label": statusItem.button?.title ?? "",
+            "label": textButton.title,
             "compact": compact,
             "caffeinateRunning": caffeine.isRunning,
             "awakeUntil": deadline.map { $0.timeIntervalSince1970 as Any } ?? NSNull()
@@ -155,7 +210,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let heading = NSTextField(labelWithString: "Your menu bar toggle is running")
         heading.font = .boldSystemFont(ofSize: 21)
         heading.frame = NSRect(x: 24, y: 223, width: 452, height: 30)
-        let body = NSTextField(wrappingLabelWithString: "Look near the clock for the green or gray light and ‘agents on’ / ‘agents off’. Left-click to toggle; right-click for timers.\n\nIf it is missing, move your pointer to the top edge and check any menu bar manager. On a crowded menu bar, try the compact light below. Hold Command and drag the light to reposition it.")
+        let body = NSTextField(wrappingLabelWithString: "Look near the clock for the power icon and ‘Agents On’ / ‘Agents Off’. Click the power icon to toggle. Click the text for timers.\n\nIf it is missing, move your pointer to the top edge and check any menu bar manager. On a crowded menu bar, try the compact light below. Hold Command and drag the light to reposition it.")
         body.font = .systemFont(ofSize: 14)
         body.frame = NSRect(x: 24, y: 88, width: 452, height: 127)
         let checkbox = NSButton(checkboxWithTitle: "Compact light only (fits a crowded menu bar)", target: self, action: #selector(changeCompact(_:)))
@@ -177,7 +232,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func requestRefresh(_ notification: Notification) {
-        if notification.userInfo?["cancelTimer"] as? Bool == true { deadline = nil; expiryFailed = false }
+        if notification.userInfo?["cancelTimer"] as? Bool == true { deadline = nil; selectedDuration = nil; expiryFailed = false }
         refresh()
     }
 
@@ -187,40 +242,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard !busy else { return }
         current = sleepDisabled()
         if let enabled = current {
-            if !enabled { if deadline != nil { deadline = nil }; expiryFailed = false }
+            if !enabled { if deadline != nil { deadline = nil }; selectedDuration = nil; expiryFailed = false }
             if enabled, let end = deadline, end <= Date(), Date() >= retryAfter {
                 change(to: false, expiring: true)
                 return
             }
             caffeine.update(enabled: enabled)
             setIndicator(enabled: enabled)
-            statusItem.button?.toolTip = enabled ? "Click to turn agents off" : "Click to turn agents on"
+            textButton.toolTip = "Click the text for timer options; click the power icon to toggle"
             if enabled, let end = deadline {
-                statusItem.button?.toolTip = "agents on — \(max(1, Int(ceil(end.timeIntervalSinceNow / 60)))) min remaining. Right-click for timers."
+                textButton.toolTip = "agents on — \(max(1, Int(ceil(end.timeIntervalSinceNow / 60)))) min remaining. Click for timer options."
             }
             if expiryFailed {
-                statusItem.button?.title = "agents on !"
-                statusItem.button?.toolTip = "Timer ended; sleep restoration failed. Retrying every 30 seconds."
+                textButton.toolTip = "Timer ended; sleep restoration failed. Retrying every 30 seconds."
             }
             if enabled && !caffeine.isRunning {
-                statusItem.button?.title = "agents on !"
-                statusItem.button?.toolTip = "Sleep disabled, but caffeinate could not start. Click to turn off."
+                textButton.toolTip = "Sleep disabled, but caffeinate could not start. Click to turn off."
             }
         } else {
             setIndicator(enabled: nil)
-            statusItem.button?.toolTip = "Agents On: unable to read sleep setting"
+            textButton.toolTip = "Agents On: unable to read sleep setting"
         }
     }
 
-    @objc func indicatorClick() {
-        if let event = NSApp.currentEvent,
-           event.type == .rightMouseUp || event.modifierFlags.contains(.control), let button = statusItem.button {
-            NSMenu.popUpContextMenu(timerMenu(), with: event, for: button)
-        } else { toggle() }
-    }
-
     @objc func showTimers(_ sender: NSButton) {
-        timerMenu().popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.maxY), in: sender)
+        let indicator = sender as? IndicatorButton
+        indicator?.menuOpen = true
+        sender.displayIfNeeded()
+        defer { indicator?.menuOpen = false }
+        timerMenu().popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: sender)
     }
 
     func timerMenu() -> NSMenu {
@@ -284,7 +334,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func change(to enabled: Bool, seconds: Double? = nil, expiring: Bool = false) {
         guard !busy else { return }
         busy = true
-        statusItem.button?.isEnabled = false
+        powerButton.isEnabled = false
+        textButton.isEnabled = false
         let value = enabled ? "1" : "0"
         DispatchQueue.global(qos: .userInitiated).async {
             let p = Process()
@@ -303,9 +354,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let message = failure
             DispatchQueue.main.async {
                 self.busy = false
-                self.statusItem.button?.isEnabled = true
+                self.powerButton.isEnabled = true
+                self.textButton.isEnabled = true
                 if message == nil && sleepDisabled() == enabled {
                     self.deadline = enabled ? seconds.map { Date().addingTimeInterval($0) } : nil
+                    self.selectedDuration = enabled ? seconds : nil
                     self.expiryFailed = false
                     self.retryAfter = .distantPast
                 } else if expiring {

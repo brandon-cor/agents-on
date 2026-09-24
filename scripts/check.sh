@@ -25,7 +25,12 @@ SWIFT
 "$work/state-check"
 printf 'import Cocoa\n' > "$work/duration-check.swift"
 sed -n '/^func durationSeconds/,/^}/p' Sources/main.swift >> "$work/duration-check.swift"
+sed -n '/^func durationLabel/,/^}/p' Sources/main.swift >> "$work/duration-check.swift"
 cat >> "$work/duration-check.swift" <<'SWIFT'
+precondition(durationLabel(1800) == "30M")
+precondition(durationLabel(3600) == "1H")
+precondition(durationLabel(5400) == "1H 30M")
+precondition(durationLabel(10800) == "3H")
 precondition(durationSeconds("30") == 1800)
 precondition(durationSeconds("60") == 3600)
 precondition(durationSeconds("180") == 10800)

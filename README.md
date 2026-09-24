@@ -4,7 +4,7 @@
 
 ![Agents On menu bar states](assets/menu-bar.svg)
 
-Click the menu bar indicator to switch directly between **agents on** (bright green light) and **agents off** (dim white light). Left-click toggles immediately; right-click opens timer options. No password on each toggle.
+Click the always-visible **power icon** to toggle between **Agents On** (green) and **Agents Off** (dim). Turning on this way keeps the Mac awake indefinitely. Left-click the **text** to open timer options with a pressed highlight; opening the menu does not turn anything on. No password on each toggle. Right-click has no action.
 
 ## Install
 
@@ -13,14 +13,14 @@ For **macOS 14 or newer**, on Apple Silicon or Intel. You need an administrator 
 Paste this into Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.2.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.3.0/install.sh | bash
 ```
 
 Enter your Mac password once when asked. Typing a password in Terminal does not display characters. The app starts immediately and automatically at login. Your existing sleep setting is preserved.
 
 You can [read the installer](install.sh) first, or [download the release](https://github.com/brandon-cor/agents-on/releases/latest). The installer downloads the app, verifies its SHA-256 checksum and ad-hoc code signature, and installs it in `~/Applications/Agents On.app`. The release is **not Apple-notarized**; browser-downloaded copies may be blocked by Gatekeeper. The installer does not remove quarantine flags or disable Gatekeeper.
 
-## Missing the menu bar icon? (v0.2.0)
+## Missing the menu bar icon? (v0.3.0)
 
 Re-run the install command above to update and repair startup. The installer now waits for a response **from the running AppKit app** confirming that its menu bar button exists, instead of treating a registered login job as success. It also re-enables a previously disabled login job and opens a small setup window after the check succeeds.
 
@@ -30,7 +30,7 @@ For an existing installation, open a new terminal and run:
 agents show
 ```
 
-This starts the app if needed, restores its menu bar item, and opens visibility options. If your menu bar is crowded or has a camera notch, enable **Compact light only**. The default still shows the green/gray light and “agents on/off”; compact mode shows the same clickable light with the label available to accessibility tools and on hover. Check any menu bar manager you use, and move the pointer to the top edge if the bar auto-hides.
+This starts the app if needed, restores its menu bar item, and opens visibility options. If your menu bar is crowded or has a camera notch, enable **Compact light only**. The default still shows the green/gray light and “Agents On/Off”; compact mode shows the same clickable light with the label available to accessibility tools and on hover. Check any menu bar manager you use, and move the pointer to the top edge if the bar auto-hides.
 
 If it still does not appear:
 
@@ -46,11 +46,11 @@ Opening the ZIP is not the full installation: the Terminal installer also sets u
 
 ## Timed sessions
 
-Right-click (or Control-click) the menu bar light to choose **30 minutes**, **1 hour**, **3 hours**, or **Custom duration…**. Enter custom durations in minutes; decimals work too (90 = 1½ hours).
+Left-click the menu bar text to choose **30 minutes**, **1 hour**, **3 hours**, or **Custom duration…**. Enter custom durations in minutes; decimals work too (90 = 1½ hours).
 
 Selecting a duration starts keep-awake immediately and replaces any previous countdown. When time runs out, the app restores normal system sleep and stops its caffeinate process. Hover to see minutes remaining; the menu shows the end time.
 
-**Until I turn it off** cancels the countdown while staying awake. **Turn off now** ends the session early. Left-click still toggles directly. You can also reach the menu from `agents show` → **Timer options…**.
+**Until I turn it off** cancels the countdown while staying awake. **Turn off now** ends the session early. The power icon still toggles directly. Timed labels show the selected duration: **Agents On-30M**, **Agents On-1H**, or **Agents On-1H 30M**. Hover shows the remaining time. You can also reach the menu from `agents show` → **Timer options…**.
 
 Deadlines persist across app restarts. An overdue timer ends when the app next runs. The app must be running to enforce expiry; if restoring sleep fails, it shows an exclamation mark and retries every 30 seconds. Existing screen-lock settings are unchanged.
 
@@ -92,7 +92,7 @@ No blanket sudo access is granted. The app never stores your password. `visudo` 
 - `SleepDisabled` is a persistent, system-wide setting. It affects all logged-in users and can remain enabled after a crash or restart. Run `sudo pmset -a disablesleep 0` to restore sleep independently of this app.
 - Other keep-awake apps can also affect sleep. Do not run multiple copies of Agents On or another lid-sleep manager together.
 - `disablesleep` is an undocumented macOS option. The app is built for macOS 14+, but lid-closed behavior must be checked on your Mac. The initial release's commands and caffeinate lifecycle were tested on Apple Silicon with macOS 27; Intel is cross-compiled, not physically tested.
-- If the label shows `agents on !`, sleep is disabled but caffeinate could not start. Click to turn it off and reinstall if it persists.
+- If the label shows `Agents On !`, sleep is disabled but caffeinate could not start. Click to turn it off and reinstall if it persists.
 
 ## Uninstall
 
