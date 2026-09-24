@@ -50,15 +50,31 @@ func durationSeconds(_ text: String) -> Double? {
     return minutes * 60
 }
 
-func durationLabel(_ seconds: Double) -> String {
-    let minutes = max(1, Int(ceil(seconds / 60)))
-    let hours = minutes / 60
-    let remainder = minutes % 60
-    return [hours > 0 ? "\(hours)H" : "", remainder > 0 ? "\(remainder)M" : ""].filter { !$0.isEmpty }.joined(separator: " ")
+func countdownLabel(_ seconds: Double) -> String {
+    let total = max(0, Int(ceil(seconds)))
+    let hours = total / 3600
+    let minutes = (total % 3600) / 60
+    let seconds = total % 60
+    return (hours > 0 ? "\(hours)h " : "") + "\(minutes)m " + String(format: "%02ds", seconds)
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+func customSeconds(hours: String, minutes: String) -> Double? {
+    func number(_ value: String) -> Double? {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? 0 : Double(text)
+    }
+    guard let h = number(hours), let m = number(minutes), h.isFinite, m.isFinite, h >= 0, m >= 0 else { return nil }
+    return durationSeconds(String(h * 60 + m))
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldDelegate {
     var statusItem: NSStatusItem!
+    var menuTimer: Timer?
+    var countdownItem: NSMenuItem?
+    var durationWindow: NSPanel?
+    let hoursInput = NSTextField(string: "0")
+    let minutesInput = NSTextField(string: "0")
+    let durationError = NSTextField(labelWithString: "")
     var timer: Timer?
     var busy = false
     var deadline: Date? {
@@ -238,11 +254,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func timerMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.delegate = self
+        countdownItem = nil
         if let end = deadline {
-            let formatter = DateFormatter()
-            formatter.timeStyle = .short
-            let remaining = durationLabel(max(0, end.timeIntervalSinceNow)).lowercased()
-            let item = NSMenuItem(title: "Timer: " + remaining + " remaining · off at " + formatter.string(from: end), action: nil, keyEquivalent: "")
+            let item = NSMenuItem(title: countdownLabel(end.timeIntervalSinceNow) + " remaining", action: nil, keyEquivalent: "")
+            countdownItem = item
             item.isEnabled = false
             menu.addItem(item)
             menu.addItem(.separator())
@@ -254,7 +270,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             item.isEnabled = !busy
             menu.addItem(item)
         }
-        for (title, action) in [("Custom duration…", #selector(customDuration)), ("Until I turn it off", #selector(unlimited)), ("Turn off now", #selector(stopNow))] {
+        for (title, action) in [("Custom duration…", #selector(customDuration))] {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
             item.target = self
             item.isEnabled = !busy
@@ -264,25 +280,84 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func preset(_ sender: NSMenuItem) { change(to: true, seconds: Double(sender.tag) * 60) }
-    @objc func unlimited() { change(to: true) }
-    @objc func stopNow() { change(to: false) }
+    func updateCountdown() {
+        countdownItem?.title = deadline.map { countdownLabel($0.timeIntervalSinceNow) + " remaining" } ?? "Timer finished"
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        menuTimer?.invalidate()
+        updateCountdown()
+        let tick = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in self?.updateCountdown() }
+        menuTimer = tick
+        // menu tracking uses a separate run-loop mode, so the countdown must run there too.
+        RunLoop.main.add(tick, forMode: .eventTracking)
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        menuTimer?.invalidate()
+        menuTimer = nil
+        countdownItem = nil
+    }
+
     @objc func customDuration() {
-        let alert = NSAlert()
-        alert.messageText = "Keep agents on for how long?"
-        alert.informativeText = "Enter minutes (90 = 1½ hours). Decimals are allowed. Maximum: 525,600 minutes."
-        let input = NSTextField(string: "90")
-        input.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
-        input.setAccessibilityLabel("Duration in minutes")
-        alert.accessoryView = input
-        alert.addButton(withTitle: "Start timer")
-        alert.addButton(withTitle: "Cancel")
-        alert.window.initialFirstResponder = input
+        if durationWindow == nil {
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 370, height: 215), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            panel.title = "Custom duration"
+            panel.isReleasedWhenClosed = false
+            let heading = NSTextField(labelWithString: "Keep Agents On for how long?")
+            heading.font = .boldSystemFont(ofSize: 18)
+            heading.frame = NSRect(x: 24, y: 161, width: 330, height: 28)
+            panel.contentView?.addSubview(heading)
+            for (field, title, x) in [(hoursInput, "Hours", 24.0), (minutesInput, "Minutes", 194.0)] {
+                let label = NSTextField(labelWithString: title)
+                label.frame = NSRect(x: x, y: 126, width: 150, height: 20)
+                field.frame = NSRect(x: x, y: 91, width: 150, height: 30)
+                field.font = .monospacedDigitSystemFont(ofSize: 18, weight: .regular)
+                field.setAccessibilityLabel(title)
+                field.delegate = self
+                panel.contentView?.addSubview(label)
+                panel.contentView?.addSubview(field)
+            }
+            hoursInput.nextKeyView = minutesInput
+            durationError.frame = NSRect(x: 24, y: 61, width: 322, height: 20)
+            durationError.textColor = .systemRed
+            durationError.font = .systemFont(ofSize: 12)
+            panel.contentView?.addSubview(durationError)
+            let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelDuration))
+            cancel.bezelStyle = .rounded
+            cancel.keyEquivalent = "\u{1b}"
+            cancel.frame = NSRect(x: 130, y: 17, width: 90, height: 32)
+            let start = NSButton(title: "Start timer", target: self, action: #selector(startDuration))
+            start.bezelStyle = .rounded
+            start.keyEquivalent = "\r"
+            start.frame = NSRect(x: 225, y: 17, width: 125, height: 32)
+            panel.contentView?.addSubview(cancel)
+            panel.contentView?.addSubview(start)
+            durationWindow = panel
+        }
+        hoursInput.stringValue = "0"
+        minutesInput.stringValue = "0"
+        durationError.stringValue = ""
+        durationWindow?.center()
+        durationWindow?.makeKeyAndOrderFront(nil)
+        durationWindow?.makeFirstResponder(hoursInput)
         NSApp.activate(ignoringOtherApps: true)
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        guard let seconds = durationSeconds(input.stringValue) else {
-            showError("Enter a positive number of minutes up to 525,600.")
+    }
+
+    func controlTextDidEndEditing(_ notification: Notification) {
+        if let field = notification.object as? NSTextField, field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            field.stringValue = "0"
+        }
+    }
+
+    @objc func cancelDuration() { durationWindow?.orderOut(nil) }
+
+    @objc func startDuration() {
+        guard let seconds = customSeconds(hours: hoursInput.stringValue, minutes: minutesInput.stringValue) else {
+            durationError.stringValue = "Enter a valid duration greater than zero."
             return
         }
+        durationWindow?.orderOut(nil)
         change(to: true, seconds: seconds)
     }
 

@@ -13,14 +13,14 @@ For **macOS 14 or newer**, on Apple Silicon or Intel. You need an administrator 
 Paste this into Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.3.1/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.4.0/install.sh | bash
 ```
 
 Enter your Mac password once when asked. Typing a password in Terminal does not display characters. The app starts immediately and automatically at login. Your existing sleep setting is preserved.
 
 You can [read the installer](install.sh) first, or [download the release](https://github.com/brandon-cor/agents-on/releases/latest). The installer downloads the app, verifies its SHA-256 checksum and ad-hoc code signature, and installs it in `~/Applications/Agents On.app`. The release is **not Apple-notarized**; browser-downloaded copies may be blocked by Gatekeeper. The installer does not remove quarantine flags or disable Gatekeeper.
 
-## Missing the menu bar icon? (v0.3.1)
+## Missing the menu bar icon? (v0.4.0)
 
 Re-run the install command above to update and repair startup. The installer now waits for a response **from the running AppKit app** confirming that its menu bar button exists, instead of treating a registered login job as success. It also re-enables a previously disabled login job and opens a small setup window after the check succeeds.
 
@@ -46,11 +46,11 @@ Opening the ZIP is not the full installation: the Terminal installer also sets u
 
 ## Timed sessions
 
-Right-click the menu bar indicator to choose **30 minutes**, **1 hour**, **3 hours**, or **Custom duration…**. Enter custom durations in minutes; decimals work too (90 = 1½ hours).
+Right-click the menu bar indicator to choose **30 minutes**, **1 hour**, **3 hours**, or **Custom duration…**. Custom duration opens a compact, icon-free window with Hours and Minutes fields starting at zero.
 
-Selecting a duration starts keep-awake immediately and replaces any previous countdown. When time runs out, the app restores normal system sleep and stops its caffeinate process. Hover to see minutes remaining; the menu shows the end time.
+Selecting a duration starts keep-awake immediately and replaces any previous countdown. When time runs out, the app restores normal system sleep and stops its caffeinate process. Hover to see minutes remaining; the open menu counts down in seconds.
 
-**Until I turn it off** cancels the countdown while staying awake. **Turn off now** ends the session early. Left-click still toggles directly. The menu bar always shows **agents on/off**; the dropdown shows the active timer’s remaining duration and end time. You can also reach the menu from `agents show` → **Timer options…**.
+Left-click the indicator to stop a session or turn on indefinitely. The menu offers only the three presets and Custom duration. While open, it shows a live countdown including seconds. The menu bar stays **agents on/off**. You can also reach the menu from `agents show` → **Timer options…**.
 
 Deadlines persist across app restarts. An overdue timer ends when the app next runs. The app must be running to enforce expiry; if restoring sleep fails, it shows an exclamation mark and retries every 30 seconds. Existing screen-lock settings are unchanged.
 
