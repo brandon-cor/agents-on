@@ -45,10 +45,21 @@ class CaffeineSession {
     }
 }
 
+func durationSeconds(_ text: String) -> Double? {
+    guard let minutes = Double(text.trimmingCharacters(in: .whitespacesAndNewlines)), minutes.isFinite, minutes > 0, minutes <= 525600 else { return nil }
+    return minutes * 60
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var timer: Timer?
     var busy = false
+    var deadline: Date? {
+        get { UserDefaults.standard.object(forKey: "awakeUntil") as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: "awakeUntil") }
+    }
+    var retryAfter = Date.distantPast
+    var expiryFailed = false
     var current: Bool?
     let caffeine = CaffeineSession()
     var helpWindow: NSWindow?
@@ -60,12 +71,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.autosaveName = "agents-on-indicator"
         statusItem.isVisible = true
         statusItem.button?.target = self
-        statusItem.button?.action = #selector(toggle)
-        statusItem.button?.sendAction(on: [.leftMouseUp])
-        DistributedNotificationCenter.default().addObserver(self, selector: #selector(requestRefresh), name: Notification.Name("io.github.brandon-cor.agents-on.refresh"), object: nil)
+        statusItem.button?.action = #selector(indicatorClick)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(requestRefresh(_:)), name: Notification.Name("io.github.brandon-cor.agents-on.refresh"), object: nil)
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(uiRequest(_:)), name: Notification.Name("io.github.brandon-cor.agents-on.ui-request"), object: nil)
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.refresh() }
+        timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.refresh() }
+        RunLoop.main.add(timer!, forMode: .common)
     }
 
     func setIndicator(enabled: Bool?) {
@@ -110,7 +122,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "frameOnScreen": onScreen,
             "label": statusItem.button?.title ?? "",
             "compact": compact,
-            "caffeinateRunning": caffeine.isRunning
+            "caffeinateRunning": caffeine.isRunning,
+            "awakeUntil": deadline.map { $0.timeIntervalSince1970 as Any } ?? NSNull()
         ]
         do {
             let data = try JSONSerialization.data(withJSONObject: response, options: [.sortedKeys])
@@ -142,7 +155,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let heading = NSTextField(labelWithString: "Your menu bar toggle is running")
         heading.font = .boldSystemFont(ofSize: 21)
         heading.frame = NSRect(x: 24, y: 223, width: 452, height: 30)
-        let body = NSTextField(wrappingLabelWithString: "Look near the clock for the green or gray light and ‘agents on’ / ‘agents off’. Click it once to toggle.\n\nIf it is missing, move your pointer to the top edge and check any menu bar manager. On a crowded menu bar, try the compact light below. Hold Command and drag the light to reposition it.")
+        let body = NSTextField(wrappingLabelWithString: "Look near the clock for the green or gray light and ‘agents on’ / ‘agents off’. Left-click to toggle; right-click for timers.\n\nIf it is missing, move your pointer to the top edge and check any menu bar manager. On a crowded menu bar, try the compact light below. Hold Command and drag the light to reposition it.")
         body.font = .systemFont(ofSize: 14)
         body.frame = NSRect(x: 24, y: 88, width: 452, height: 127)
         let checkbox = NSButton(checkboxWithTitle: "Compact light only (fits a crowded menu bar)", target: self, action: #selector(changeCompact(_:)))
@@ -151,15 +164,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let footer = NSTextField(labelWithString: "No icon yet? Run agents doctor and share its output.")
         footer.font = .systemFont(ofSize: 12)
         footer.textColor = .secondaryLabelColor
-        footer.frame = NSRect(x: 24, y: 17, width: 452, height: 20)
-        for view in [heading, body, checkbox, footer] { window.contentView?.addSubview(view) }
+        footer.stringValue = "Missing icon? Run agents doctor."
+        footer.frame = NSRect(x: 177, y: 17, width: 299, height: 20)
+        let timers = NSButton(title: "Timer options…", target: self, action: #selector(showTimers(_:)))
+        timers.bezelStyle = .rounded
+        timers.frame = NSRect(x: 20, y: 11, width: 149, height: 30)
+        for view in [heading, body, checkbox, footer, timers] { window.contentView?.addSubview(view) }
         helpWindow = window
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    @objc func requestRefresh() { refresh() }
+    @objc func requestRefresh(_ notification: Notification) {
+        if notification.userInfo?["cancelTimer"] as? Bool == true { deadline = nil; expiryFailed = false }
+        refresh()
+    }
 
     func applicationWillTerminate(_ notification: Notification) { caffeine.update(enabled: false) }
 
@@ -167,9 +187,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard !busy else { return }
         current = sleepDisabled()
         if let enabled = current {
+            if !enabled { if deadline != nil { deadline = nil }; expiryFailed = false }
+            if enabled, let end = deadline, end <= Date(), Date() >= retryAfter {
+                change(to: false, expiring: true)
+                return
+            }
             caffeine.update(enabled: enabled)
             setIndicator(enabled: enabled)
             statusItem.button?.toolTip = enabled ? "Click to turn agents off" : "Click to turn agents on"
+            if enabled, let end = deadline {
+                statusItem.button?.toolTip = "agents on — \(max(1, Int(ceil(end.timeIntervalSinceNow / 60)))) min remaining. Right-click for timers."
+            }
+            if expiryFailed {
+                statusItem.button?.title = "agents on !"
+                statusItem.button?.toolTip = "Timer ended; sleep restoration failed. Retrying every 30 seconds."
+            }
             if enabled && !caffeine.isRunning {
                 statusItem.button?.title = "agents on !"
                 statusItem.button?.toolTip = "Sleep disabled, but caffeinate could not start. Click to turn off."
@@ -180,6 +212,67 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc func indicatorClick() {
+        if let event = NSApp.currentEvent,
+           event.type == .rightMouseUp || event.modifierFlags.contains(.control), let button = statusItem.button {
+            NSMenu.popUpContextMenu(timerMenu(), with: event, for: button)
+        } else { toggle() }
+    }
+
+    @objc func showTimers(_ sender: NSButton) {
+        timerMenu().popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.maxY), in: sender)
+    }
+
+    func timerMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        if let end = deadline {
+            let formatter = DateFormatter()
+            formatter.timeStyle = .short
+            let item = NSMenuItem(title: "Turns off at " + formatter.string(from: end), action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+            menu.addItem(.separator())
+        }
+        for (title, minutes) in [("30 minutes", 30), ("1 hour", 60), ("3 hours", 180)] {
+            let item = NSMenuItem(title: title, action: #selector(preset(_:)), keyEquivalent: "")
+            item.tag = minutes
+            item.target = self
+            item.isEnabled = !busy
+            menu.addItem(item)
+        }
+        for (title, action) in [("Custom duration…", #selector(customDuration)), ("Until I turn it off", #selector(unlimited)), ("Turn off now", #selector(stopNow))] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            item.isEnabled = !busy
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    @objc func preset(_ sender: NSMenuItem) { change(to: true, seconds: Double(sender.tag) * 60) }
+    @objc func unlimited() { change(to: true) }
+    @objc func stopNow() { change(to: false) }
+    @objc func customDuration() {
+        let alert = NSAlert()
+        alert.messageText = "Keep agents on for how long?"
+        alert.informativeText = "Enter minutes (90 = 1½ hours). Decimals are allowed. Maximum: 525,600 minutes."
+        let input = NSTextField(string: "90")
+        input.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
+        input.setAccessibilityLabel("Duration in minutes")
+        alert.accessoryView = input
+        alert.addButton(withTitle: "Start timer")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = input
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard let seconds = durationSeconds(input.stringValue) else {
+            showError("Enter a positive number of minutes up to 525,600.")
+            return
+        }
+        change(to: true, seconds: seconds)
+    }
+
     @objc func toggle() {
         guard !busy else { return }
         guard let enabled = sleepDisabled() else {
@@ -188,7 +281,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         change(to: !enabled)
     }
-    func change(to enabled: Bool) {
+    func change(to enabled: Bool, seconds: Double? = nil, expiring: Bool = false) {
         guard !busy else { return }
         busy = true
         statusItem.button?.isEnabled = false
@@ -211,12 +304,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async {
                 self.busy = false
                 self.statusItem.button?.isEnabled = true
-                self.refresh()
-                if let message = message, !message.contains("-128") {
-                    self.showError(message)
-                } else if message == nil && self.current != enabled {
-                    self.showError("The requested sleep setting could not be verified.")
+                if message == nil && sleepDisabled() == enabled {
+                    self.deadline = enabled ? seconds.map { Date().addingTimeInterval($0) } : nil
+                    self.expiryFailed = false
+                    self.retryAfter = .distantPast
+                } else if expiring {
+                    self.expiryFailed = true
+                    self.retryAfter = Date().addingTimeInterval(30)
+                } else {
+                    self.showError(message ?? "The requested sleep setting could not be verified.")
                 }
+                self.refresh()
             }
         }
     }
@@ -251,7 +349,7 @@ if CommandLine.arguments.contains("--check-ui") || CommandLine.arguments.contain
     exit(1)
 }
 if CommandLine.arguments.contains("--refresh") {
-    DistributedNotificationCenter.default().postNotificationName(Notification.Name("io.github.brandon-cor.agents-on.refresh"), object: nil, userInfo: nil, deliverImmediately: true)
+    DistributedNotificationCenter.default().postNotificationName(Notification.Name("io.github.brandon-cor.agents-on.refresh"), object: nil, userInfo: ["cancelTimer": CommandLine.arguments.contains("--cancel-timer")], deliverImmediately: true)
     exit(0)
 }
 if CommandLine.arguments.contains("--status") {

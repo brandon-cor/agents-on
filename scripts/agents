@@ -14,7 +14,7 @@ case "$1" in
       exit 1
     fi
     /bin/bash "$HOME/Library/Application Support/Agents On/start.sh" >/dev/null
-    "$app" --refresh
+    "$app" --refresh --cancel-timer
     actual=$(/usr/bin/pmset -g | /usr/bin/awk '$1 == "SleepDisabled" {print $2}')
     [[ "$actual" == "$value" ]] || { echo 'Could not verify the sleep setting.' >&2; exit 1; }
     echo "agents $1"

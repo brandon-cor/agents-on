@@ -4,7 +4,7 @@
 
 ![Agents On menu bar states](assets/menu-bar.svg)
 
-Click the menu bar indicator to switch directly between **agents on** (bright green light) and **agents off** (dim white light). No dropdown and no password on each toggle.
+Click the menu bar indicator to switch directly between **agents on** (bright green light) and **agents off** (dim white light). Left-click toggles immediately; right-click opens timer options. No password on each toggle.
 
 ## Install
 
@@ -13,14 +13,14 @@ For **macOS 14 or newer**, on Apple Silicon or Intel. You need an administrator 
 Paste this into Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.1.2/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.2.0/install.sh | bash
 ```
 
 Enter your Mac password once when asked. Typing a password in Terminal does not display characters. The app starts immediately and automatically at login. Your existing sleep setting is preserved.
 
 You can [read the installer](install.sh) first, or [download the release](https://github.com/brandon-cor/agents-on/releases/latest). The installer downloads the app, verifies its SHA-256 checksum and ad-hoc code signature, and installs it in `~/Applications/Agents On.app`. The release is **not Apple-notarized**; browser-downloaded copies may be blocked by Gatekeeper. The installer does not remove quarantine flags or disable Gatekeeper.
 
-## Missing the menu bar icon? (v0.1.2)
+## Missing the menu bar icon? (v0.2.0)
 
 Re-run the install command above to update and repair startup. The installer now waits for a response **from the running AppKit app** confirming that its menu bar button exists, instead of treating a registered login job as success. It also re-enables a previously disabled login job and opens a small setup window after the check succeeds.
 
@@ -44,6 +44,16 @@ An AppKit response proves that the item was created, **not that macOS has room t
 
 Opening the ZIP is not the full installation: the Terminal installer also sets up login startup, commands, and the two-command permission rule.
 
+## Timed sessions
+
+Right-click (or Control-click) the menu bar light to choose **30 minutes**, **1 hour**, **3 hours**, or **Custom duration…**. Enter custom durations in minutes; decimals work too (90 = 1½ hours).
+
+Selecting a duration starts keep-awake immediately and replaces any previous countdown. When time runs out, the app restores normal system sleep and stops its caffeinate process. Hover to see minutes remaining; the menu shows the end time.
+
+**Until I turn it off** cancels the countdown while staying awake. **Turn off now** ends the session early. Left-click still toggles directly. You can also reach the menu from `agents show` → **Timer options…**.
+
+Deadlines persist across app restarts. An overdue timer ends when the app next runs. The app must be running to enforce expiry; if restoring sleep fails, it shows an exclamation mark and retries every 30 seconds. Existing screen-lock settings are unchanged.
+
 ## Use
 
 Click the indicator once to toggle. Or open a **new terminal tab** and run:
@@ -61,7 +71,7 @@ sleep status  # report the current system sleep setting
 | agents on | Runs `sudo pmset -a disablesleep 1` and starts a managed `caffeinate -di` process. |
 | agents off | Runs `sudo pmset -a disablesleep 0` and stops only this app's caffeinate process. |
 
-The `-d` flag keeps the display awake while open; `-i` prevents idle system sleep. The app adds `-w <app-pid>` so caffeinate exits if the app dies. Lid sleep is handled by `pmset`, not caffeinate. The indicator reads the actual `SleepDisabled` setting every three seconds; clicks update it as soon as the command finishes.
+The `-d` flag keeps the display awake while open; `-i` prevents idle system sleep. The app adds `-w <app-pid>` so caffeinate exits if the app dies. Lid sleep is handled by `pmset`, not caffeinate. The indicator reads the actual `SleepDisabled` setting every second; clicks update it as soon as the command finishes.
 
 **“Agents on” is a keep-awake label.** It does not launch, pause, or stop your AI agents, and it does not remove your screen-lock password. UI automation that needs an unlocked screen may still require one. This is a Mac app, not a Windows or Linux app.
 

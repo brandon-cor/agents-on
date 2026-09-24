@@ -23,5 +23,20 @@ print("Fresh-account and explicit sleep states verified.")
 SWIFT
 /usr/bin/swiftc -target "$(uname -m)-apple-macos14.0" "$work/state-check.swift" -o "$work/state-check" -framework Cocoa
 "$work/state-check"
+printf 'import Cocoa\n' > "$work/duration-check.swift"
+sed -n '/^func durationSeconds/,/^}/p' Sources/main.swift >> "$work/duration-check.swift"
+cat >> "$work/duration-check.swift" <<'SWIFT'
+precondition(durationSeconds("30") == 1800)
+precondition(durationSeconds("60") == 3600)
+precondition(durationSeconds("180") == 10800)
+precondition(durationSeconds(" 90 ") == 5400)
+precondition(durationSeconds("0.1") == 6)
+for invalid in ["", "0", "-1", "nan", "inf", "abc", "525601"] {
+    precondition(durationSeconds(invalid) == nil)
+}
+print("Preset/custom durations and invalid input verified.")
+SWIFT
+/usr/bin/swiftc -target "$(uname -m)-apple-macos14.0" "$work/duration-check.swift" -o "$work/duration-check" -framework Cocoa
+"$work/duration-check"
 bash scripts/build.sh
 bash install.sh --check-only --archive-dir "$PWD/dist"
