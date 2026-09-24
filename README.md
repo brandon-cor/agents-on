@@ -13,18 +13,20 @@ For **macOS 14 or newer**, on Apple Silicon or Intel. You need an administrator 
 Paste this into Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.4.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.4.1/install.sh | bash
 ```
 
 Enter your Mac password once when asked. Typing a password in Terminal does not display characters. The app starts immediately and automatically at login. Your existing sleep setting is preserved.
 
 You can [read the installer](install.sh) first, or [download the release](https://github.com/brandon-cor/agents-on/releases/latest). The installer downloads the app, verifies its SHA-256 checksum and ad-hoc code signature, and installs it in `~/Applications/Agents On.app`. The release is **not Apple-notarized**; browser-downloaded copies may be blocked by Gatekeeper. The installer does not remove quarantine flags or disable Gatekeeper.
 
-## Missing the menu bar icon? (v0.4.0)
+## Missing the menu bar icon? (v0.4.1)
 
 Re-run the install command above to update and repair startup. The installer now waits for a response **from the running AppKit app** confirming that its menu bar button exists, instead of treating a registered login job as success. It also re-enables a previously disabled login job and opens a small setup window after the check succeeds.
 
-For an existing installation, open a new terminal and run:
+If you see the light but no label, **right-click the light → Show menu bar text**. A checkmark means text is enabled. The choice is saved, and new installations show text by default. If the whole indicator is missing, menu bar crowding or startup may be the cause.
+
+For an existing installation that needs startup recovery, open a new terminal and run:
 
 ```bash
 agents show
@@ -50,7 +52,7 @@ Right-click the menu bar indicator to choose **30 minutes**, **1 hour**, **3 hou
 
 Selecting a duration starts keep-awake immediately and replaces any previous countdown. When time runs out, the app restores normal system sleep and stops its caffeinate process. Hover to see minutes remaining; the open menu counts down in seconds.
 
-Left-click the indicator to stop a session or turn on indefinitely. The menu offers only the three presets and Custom duration. While open, it shows a live countdown including seconds. The menu bar stays **agents on/off**. You can also reach the menu from `agents show` → **Timer options…**.
+Left-click the indicator to stop a session or turn on indefinitely. The menu offers the three presets and Custom duration, plus **Show menu bar text** to switch between the full label and light-only mode. While open, it shows a live countdown including seconds. The menu bar stays **agents on/off**. You can also reach the menu from `agents show` → **Timer options…**.
 
 Deadlines persist across app restarts. An overdue timer ends when the app next runs. The app must be running to enforce expiry; if restoring sleep fails, it shows an exclamation mark and retries every 30 seconds. Existing screen-lock settings are unchanged.
 

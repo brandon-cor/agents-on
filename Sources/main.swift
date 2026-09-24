@@ -86,6 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
     var current: Bool?
     let caffeine = CaffeineSession()
     var helpWindow: NSWindow?
+    var compactCheckbox: NSButton?
     var compact = UserDefaults.standard.bool(forKey: "compactIndicator")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -161,10 +162,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
     }
 
     @objc func changeCompact(_ sender: NSButton) {
-        compact = sender.state == .on
+        setCompact(sender.state == .on)
+    }
+
+    func setCompact(_ enabled: Bool) {
+        compact = enabled
         UserDefaults.standard.set(compact, forKey: "compactIndicator")
+        compactCheckbox?.state = compact ? .on : .off
         refresh()
     }
+
+    @objc func toggleMenuBarText() { setCompact(!compact) }
 
     func showHelp() {
         if let window = helpWindow {
@@ -178,10 +186,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
         let heading = NSTextField(labelWithString: "Your menu bar toggle is running")
         heading.font = .boldSystemFont(ofSize: 21)
         heading.frame = NSRect(x: 24, y: 223, width: 452, height: 30)
-        let body = NSTextField(wrappingLabelWithString: "Look near the clock for the green or gray light and ‘agents on’ / ‘agents off’. Left-click to toggle; right-click for timers.\n\nIf it is missing, move your pointer to the top edge and check any menu bar manager. On a crowded menu bar, try the compact light below. Hold Command and drag the light to reposition it.")
+        let body = NSTextField(wrappingLabelWithString: "Look near the clock for the green or gray light and ‘agents on’ / ‘agents off’. Left-click to toggle; right-click for timers or “Show menu bar text”.\n\nIf it is missing, move your pointer to the top edge and check any menu bar manager. On a crowded menu bar, try the compact light below. Hold Command and drag the light to reposition it.")
         body.font = .systemFont(ofSize: 14)
         body.frame = NSRect(x: 24, y: 88, width: 452, height: 127)
         let checkbox = NSButton(checkboxWithTitle: "Compact light only (fits a crowded menu bar)", target: self, action: #selector(changeCompact(_:)))
+        compactCheckbox = checkbox
         checkbox.state = compact ? .on : .off
         checkbox.frame = NSRect(x: 24, y: 48, width: 452, height: 28)
         let footer = NSTextField(labelWithString: "No icon yet? Run agents doctor and share its output.")
@@ -276,6 +285,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
             item.isEnabled = !busy
             menu.addItem(item)
         }
+        menu.addItem(.separator())
+        let textOption = NSMenuItem(title: "Show menu bar text", action: #selector(toggleMenuBarText), keyEquivalent: "")
+        textOption.target = self
+        textOption.state = compact ? .off : .on
+        textOption.isEnabled = !busy
+        menu.addItem(textOption)
         return menu
     }
 
