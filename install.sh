@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-version=0.3.0
+version=0.3.1
 base="https://github.com/brandon-cor/agents-on/releases/download/v$version"
 check_only=0
 archive_dir=''
