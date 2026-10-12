@@ -13,14 +13,14 @@ For **macOS 14 or newer**, on Apple Silicon or Intel. You need an administrator 
 Paste this into Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.4.1/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/brandon-cor/agents-on/v0.5.0/install.sh | bash
 ```
 
 Enter your Mac password once when asked. Typing a password in Terminal does not display characters. The app starts immediately and automatically at login. Your existing sleep setting is preserved.
 
 You can [read the installer](install.sh) first, or [download the release](https://github.com/brandon-cor/agents-on/releases/latest). The installer downloads the app, verifies its SHA-256 checksum and ad-hoc code signature, and installs it in `~/Applications/Agents On.app`. The release is **not Apple-notarized**; browser-downloaded copies may be blocked by Gatekeeper. The installer does not remove quarantine flags or disable Gatekeeper.
 
-## Missing the menu bar icon? (v0.4.1)
+## Missing the menu bar icon?
 
 Re-run the install command above to update and repair startup. The installer now waits for a response **from the running AppKit app** confirming that its menu bar button exists, instead of treating a registered login job as success. It also re-enables a previously disabled login job and opens a small setup window after the check succeeds.
 
@@ -55,6 +55,18 @@ Selecting a duration starts keep-awake immediately and replaces any previous cou
 Left-click the indicator to stop a session or turn on indefinitely. The menu offers the three presets and Custom duration, plus **Show menu bar text** to switch between the full label and light-only mode. While open, it shows a live countdown including seconds. The menu bar stays **agents on/off**. You can also reach the menu from `agents show` → **Timer options…**.
 
 Deadlines persist across app restarts. An overdue timer ends when the app next runs. The app must be running to enforce expiry; if restoring sleep fails, it shows an exclamation mark and retries every 30 seconds. Existing screen-lock settings are unchanged.
+
+Right-click opens the full native menu immediately; left-click still toggles keep-awake.
+
+## Heat protection
+
+Right-click the indicator and use **Turn off if it gets too hot**, directly below **Show menu bar text**. It is enabled by default and remembers your choice.
+
+At macOS **Serious** or **Critical** thermal state, Agents On cancels its timer, stops its own caffeinate process, and restores normal sleep settings. The menu then says **Turned off because of heat**. Cooling down does not restart keep-awake; you must turn it on again yourself. Starting a session while macOS still reports Serious or Critical is blocked while protection is enabled.
+
+If restoring sleep fails, the app keeps its own caffeinate process stopped, shows a failure in the menu, and retries every five seconds, even after cooling. A pending shutoff survives app restarts.
+
+This uses [Apple's system thermal states](https://developer.apple.com/library/archive/documentation/Performance/Conceptual/power_efficiency_guidelines_osx/RespondToThermalStateChanges.html), not a surface-temperature measurement. It cannot guarantee comfortable-to-touch temperatures, immediate sleep, or cooling if other apps keep the Mac busy. Unsupported or unknown thermal reporting may appear as normal. Turn keep-awake off and ensure the Mac is asleep before putting it in a bag.
 
 ## Use
 

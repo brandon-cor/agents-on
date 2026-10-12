@@ -32,13 +32,17 @@ check.setIndicator(enabled: true)
 precondition(check.statusItem.button!.title == "agents on")
 precondition(check.timerMenu().items.first!.title.contains("30m 00s remaining"))
 let menu = check.timerMenu()
-precondition(menu.items.filter { $0.action != nil }.map { $0.title } == ["30 minutes", "1 hour", "3 hours", "Custom duration…", "Show menu bar text"])
+precondition(menu.items.filter { $0.action != nil }.map { $0.title } == ["30 minutes", "1 hour", "3 hours", "Custom duration…", "Show menu bar text", "Turn off if it gets too hot"])
 check.menuWillOpen(menu)
 check.deadline = Date().addingTimeInterval(1799)
 let until = Date().addingTimeInterval(0.35)
 while Date() < until { RunLoop.main.run(mode: .eventTracking, before: until) }
 precondition(menu.items.first!.title.contains("29m 59s"))
+check.statusItem.menu = menu
 check.menuDidClose(menu)
+precondition(check.statusItem.menu == nil)
+check.statusItem.button?.performClick(nil)
+precondition(check.toggles == 2 && check.menus == 1)
 precondition(check.menuTimer == nil)
 precondition(customSeconds(hours: "1", minutes: "30") == 5400)
 precondition(customSeconds(hours: "", minutes: "30") == 1800)
@@ -48,10 +52,10 @@ precondition(customSeconds(hours: "6", minutes: "0") == 21600)
 let savedCompact = UserDefaults.standard.object(forKey: "compactIndicator")
 check.setCompact(true)
 precondition(check.statusItem.button!.title.isEmpty)
-precondition(check.timerMenu().items.last!.state == .off)
+precondition(check.timerMenu().items.first { $0.title == "Show menu bar text" }!.state == .off)
 check.toggleMenuBarText()
 precondition(check.statusItem.button!.title == "agents off")
-precondition(check.timerMenu().items.last!.state == .on)
+precondition(check.timerMenu().items.first { $0.title == "Show menu bar text" }!.state == .on)
 precondition(!UserDefaults.standard.bool(forKey: "compactIndicator"))
 UserDefaults.standard.set(savedCompact, forKey: "compactIndicator")
 check.customDuration()
@@ -60,6 +64,31 @@ check.cancelDuration()
 check.setIndicator(enabled: false)
 precondition(check.statusItem.button!.title == "agents off")
 precondition(check.statusItem.button!.image != nil)
+// exercise AppKit's real status-item menu tracking, including dismissal and the next click.
+class NativeMenuCheck: AppDelegate {
+    var opened = 0
+    var toggles = 0
+    override func refresh() { setIndicator(enabled: false) }
+    override func toggle() { toggles += 1 }
+    override func menuWillOpen(_ menu: NSMenu) {
+        opened += 1
+        super.menuWillOpen(menu)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { menu.cancelTracking() }
+    }
+}
+let native = NativeMenuCheck()
+native.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+native.timer?.invalidate()
+for expected in 1...2 {
+    native.handleClick(.rightMouseUp)
+    precondition(native.opened == expected, "right-click must open the native menu immediately")
+    precondition(native.statusItem.menu == nil && native.menuTimer == nil)
+    precondition(native.statusItem.button?.target === native && native.statusItem.button?.action == #selector(AppDelegate.indicatorClick))
+    native.handleClick(.leftMouseUp)
+    precondition(native.toggles == expected, "dismissal must restore left-click toggling")
+}
+NSStatusBar.system.removeStatusItem(native.statusItem)
+
 NSStatusBar.system.removeStatusItem(check.statusItem)
 print("Left-click toggle, right-click menu, lowercase labels, and dropdown-only timer verified.")
 SWIFT

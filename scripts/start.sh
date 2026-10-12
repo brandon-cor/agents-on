@@ -11,9 +11,16 @@ binary="$app/Contents/MacOS/AgentsOn"
 }
 # a disabled login job stays disabled across reinstalls until explicitly enabled.
 /bin/launchctl enable "$service"
-if ! /bin/launchctl print "$service" >/dev/null 2>&1; then
-  /bin/launchctl bootstrap "gui/$(id -u)" "$plist"
-fi
+# launchd can take a moment to remove the old job during an update.
+for attempt in 1 2 3 4 5; do
+  if /bin/launchctl print "$service" >/dev/null 2>&1; then break; fi
+  if /bin/launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null; then break; fi
+  if [[ "$attempt" == 5 ]]; then
+    echo 'Could not register the menu bar app. Run agents doctor for details.' >&2
+    exit 1
+  fi
+  /bin/sleep 1
+done
 /bin/launchctl kickstart "$service"
 if "$binary" --check-ui; then exit 0; fi
 # launch services provides a second path to a GUI app if direct startup failed.

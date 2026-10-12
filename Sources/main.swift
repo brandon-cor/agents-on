@@ -81,7 +81,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
         get { UserDefaults.standard.object(forKey: "awakeUntil") as? Date }
         set { UserDefaults.standard.set(newValue, forKey: "awakeUntil") }
     }
+    var heatProtection: Bool {
+        get { UserDefaults.standard.object(forKey: "heatProtection") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "heatProtection") }
+    }
+    var heatShutdownPending: Bool {
+        get { UserDefaults.standard.bool(forKey: "heatShutdownPending") }
+        set { UserDefaults.standard.set(newValue, forKey: "heatShutdownPending") }
+    }
+    var turnedOffForHeat: Bool {
+        get { UserDefaults.standard.bool(forKey: "turnedOffForHeat") }
+        set { UserDefaults.standard.set(newValue, forKey: "turnedOffForHeat") }
+    }
+    var heatRetryAfter = Date.distantPast
+    var heatShutdownFailed = false
+    var thermalObserver: NSObjectProtocol?
+    var enabling = false
     var retryAfter = Date.distantPast
+
     var expiryFailed = false
     var current: Bool?
     let caffeine = CaffeineSession()
@@ -99,6 +116,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(requestRefresh(_:)), name: Notification.Name("io.github.brandon-cor.agents-on.refresh"), object: nil)
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(uiRequest(_:)), name: Notification.Name("io.github.brandon-cor.agents-on.ui-request"), object: nil)
+        // apple requires an initial read before subscribing; callbacks enter the main queue.
+        _ = readThermalState()
+        thermalObserver = NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.refresh()
+        }
         refresh()
         timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.refresh() }
         RunLoop.main.add(timer!, forMode: .common)
@@ -146,6 +168,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
             "frameOnScreen": onScreen,
             "label": statusItem.button?.title ?? "",
             "compact": compact,
+            "heatProtection": heatProtection,
+            "heatShutdownPending": heatShutdownPending,
+            "turnedOffForHeat": turnedOffForHeat,
+            "thermalState": readThermalState().rawValue,
             "caffeinateRunning": caffeine.isRunning,
             "awakeUntil": deadline.map { $0.timeIntervalSince1970 as Any } ?? NSNull()
         ]
@@ -213,22 +239,70 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
         refresh()
     }
 
-    func applicationWillTerminate(_ notification: Notification) { caffeine.update(enabled: false) }
+    func applicationWillTerminate(_ notification: Notification) {
+        if let observer = thermalObserver { NotificationCenter.default.removeObserver(observer) }
+        updateCaffeine(enabled: false)
+    }
+
+    func readThermalState() -> ProcessInfo.ThermalState { ProcessInfo.processInfo.thermalState }
+    func readSleepState() -> Bool? { sleepDisabled() }
+    func updateCaffeine(enabled: Bool) { caffeine.update(enabled: enabled) }
+    func tooHot() -> Bool {
+        let state = readThermalState()
+        return state == .serious || state == .critical
+    }
+
+    func latchHeatShutdown() {
+        heatShutdownPending = true
+        deadline = nil
+        updateCaffeine(enabled: false)
+    }
+
+    func finishHeatShutdown() {
+        heatShutdownPending = false
+        heatShutdownFailed = false
+        heatRetryAfter = .distantPast
+        turnedOffForHeat = true
+        deadline = nil
+    }
+
+    @objc func toggleHeatProtection() {
+        heatProtection.toggle()
+        refresh()
+    }
 
     func refresh() {
+        // latch even during an in-flight on command so a later cooldown cannot lose the trip.
+        if heatProtection && tooHot() && (current == true || enabling) { latchHeatShutdown() }
         guard !busy else { return }
-        current = sleepDisabled()
+        current = readSleepState()
         if let enabled = current {
+            if heatProtection && enabled && tooHot() { latchHeatShutdown() }
+            if heatShutdownPending {
+                updateCaffeine(enabled: false)
+                if !enabled {
+                    finishHeatShutdown()
+                } else {
+                    setIndicator(enabled: true)
+                    statusItem.button?.toolTip = "Heat shutoff pending; restoring normal sleep."
+                    if heatShutdownFailed { statusItem.button?.title = compact ? "!" : "agents on !" }
+                    if Date() >= heatRetryAfter { change(to: false, overheating: true) }
+                    return
+                }
+            }
             if !enabled { if deadline != nil { deadline = nil }; expiryFailed = false }
             if enabled, let end = deadline, end <= Date(), Date() >= retryAfter {
                 change(to: false, expiring: true)
                 return
             }
-            caffeine.update(enabled: enabled)
+            updateCaffeine(enabled: enabled)
             setIndicator(enabled: enabled)
             statusItem.button?.toolTip = enabled ? "Click to turn agents off" : "Click to turn agents on"
             if enabled, let end = deadline {
                 statusItem.button?.toolTip = "agents on — \(max(1, Int(ceil(end.timeIntervalSinceNow / 60)))) min remaining. Right-click for timers."
+            }
+            if !enabled && turnedOffForHeat {
+                statusItem.button?.toolTip = "Turned off because of heat. Click to start again after cooling."
             }
             if expiryFailed {
                 statusItem.button?.title = "agents on !"
@@ -257,7 +331,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
     }
 
     @objc func showTimers(_ sender: NSButton) {
-        timerMenu().popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: sender)
+        let menu = timerMenu()
+        if sender === statusItem.button {
+            // let the status bar place its own pull-down below the menu bar.
+            statusItem.menu = menu
+            defer { detachStatusMenu(menu) }
+            sender.performClick(nil)
+        } else {
+            let bottom = sender.isFlipped ? sender.bounds.maxY : sender.bounds.minY
+            menu.popUp(positioning: nil, at: NSPoint(x: sender.bounds.minX, y: bottom), in: sender)
+        }
+    }
+
+    func detachStatusMenu(_ menu: NSMenu) {
+        // restoring the action after closing keeps the next left-click a toggle.
+        guard statusItem.menu === menu else { return }
+        statusItem.menu = nil
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(indicatorClick)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
     func timerMenu() -> NSMenu {
@@ -265,6 +357,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
         menu.autoenablesItems = false
         menu.delegate = self
         countdownItem = nil
+        if heatShutdownPending || turnedOffForHeat {
+            let message = heatShutdownPending ? (heatShutdownFailed ? "Heat shutoff failed; retrying…" : "Turning off because of heat…") : "Turned off because of heat"
+            let reason = NSMenuItem(title: message, action: nil, keyEquivalent: "")
+            reason.isEnabled = false
+            menu.addItem(reason)
+            menu.addItem(.separator())
+        }
         if let end = deadline {
             let item = NSMenuItem(title: countdownLabel(end.timeIntervalSinceNow) + " remaining", action: nil, keyEquivalent: "")
             countdownItem = item
@@ -291,6 +390,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
         textOption.state = compact ? .off : .on
         textOption.isEnabled = !busy
         menu.addItem(textOption)
+        let heatOption = NSMenuItem(title: "Turn off if it gets too hot", action: #selector(toggleHeatProtection), keyEquivalent: "")
+        heatOption.target = self
+        heatOption.state = heatProtection ? .on : .off
+        heatOption.isEnabled = !busy
+        heatOption.toolTip = "Turns off keep-awake at macOS Serious or Critical heat levels."
+        menu.addItem(heatOption)
         return menu
     }
 
@@ -309,6 +414,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
     }
 
     func menuDidClose(_ menu: NSMenu) {
+        detachStatusMenu(menu)
         menuTimer?.invalidate()
         menuTimer = nil
         countdownItem = nil
@@ -378,21 +484,51 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
 
     @objc func toggle() {
         guard !busy else { return }
-        guard let enabled = sleepDisabled() else {
+        guard let enabled = readSleepState() else {
             showError("Unable to read the current sleep setting.")
             return
         }
         change(to: !enabled)
     }
-    func change(to enabled: Bool, seconds: Double? = nil, expiring: Bool = false) {
+    func change(to enabled: Bool, seconds: Double? = nil, expiring: Bool = false, overheating: Bool = false) {
         guard !busy else { return }
+        if enabled && (heatShutdownPending || (heatProtection && tooHot())) {
+            showError("Your Mac needs to cool before keep-awake can start.")
+            return
+        }
         busy = true
+        enabling = enabled
         statusItem.button?.isEnabled = false
-        let value = enabled ? "1" : "0"
+        setSleepState(enabled) { [weak self] message in
+            guard let self = self else { return }
+            self.busy = false
+            self.enabling = false
+            self.statusItem.button?.isEnabled = true
+            if message == nil && self.readSleepState() == enabled {
+                self.deadline = enabled && !self.heatShutdownPending ? seconds.map { Date().addingTimeInterval($0) } : nil
+                self.expiryFailed = false
+                self.retryAfter = .distantPast
+                if !enabled && self.heatShutdownPending { self.finishHeatShutdown() }
+                else if enabled && !self.heatShutdownPending { self.turnedOffForHeat = false }
+            } else if overheating || self.heatShutdownPending {
+                // keep retrying even if the Mac cools down or the checkbox is later disabled.
+                self.heatShutdownFailed = true
+                self.heatRetryAfter = Date().addingTimeInterval(5)
+            } else if expiring {
+                self.expiryFailed = true
+                self.retryAfter = Date().addingTimeInterval(30)
+            } else {
+                self.showError(message ?? "The requested sleep setting could not be verified.")
+            }
+            self.refresh()
+        }
+    }
+
+    func setSleepState(_ enabled: Bool, completion: @escaping (String?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
-            p.arguments = ["-n", "/usr/bin/pmset", "-a", "disablesleep", value]
+            p.arguments = ["-n", "/usr/bin/pmset", "-a", "disablesleep", enabled ? "1" : "0"]
             let pipe = Pipe()
             p.standardError = pipe
             p.standardOutput = FileHandle.nullDevice
@@ -404,21 +540,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSTextFieldD
                 if p.terminationStatus != 0 { failure = String(data: data, encoding: .utf8) ?? "Could not change sleep setting." }
             } catch { failure = error.localizedDescription }
             let message = failure
-            DispatchQueue.main.async {
-                self.busy = false
-                self.statusItem.button?.isEnabled = true
-                if message == nil && sleepDisabled() == enabled {
-                    self.deadline = enabled ? seconds.map { Date().addingTimeInterval($0) } : nil
-                    self.expiryFailed = false
-                    self.retryAfter = .distantPast
-                } else if expiring {
-                    self.expiryFailed = true
-                    self.retryAfter = Date().addingTimeInterval(30)
-                } else {
-                    self.showError(message ?? "The requested sleep setting could not be verified.")
-                }
-                self.refresh()
-            }
+            DispatchQueue.main.async { completion(message) }
         }
     }
     func showError(_ message: String) {
