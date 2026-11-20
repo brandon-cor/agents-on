@@ -1,12 +1,41 @@
 # Agents On
 
-**Keep your Mac awake while your agents work—even with the lid closed.**
+**Keep your Mac or Windows PC awake while your agents work—even with the lid closed.**
 
 ![Agents On menu bar states](assets/menu-bar.svg)
 
 Left-click anywhere on the menu bar indicator to toggle **agents on** (bright green light) and **agents off** (dim white light). Turning on starts an indefinite session. Right-click opens timer options without toggling. No password on each toggle.
 
-## Install
+## Install on Windows
+
+For **Windows 11**, on Intel/AMD x64 or ARM64. The app includes its runtime; no .NET installation or administrator prompt is normally needed.
+
+Paste this into **PowerShell**:
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod https://raw.githubusercontent.com/brandon-cor/agents-on/v0.6.0/windows/install.ps1)))
+```
+
+Or download the matching **Agents-On-Windows-win-x64.zip** or **Agents-On-Windows-win-arm64.zip** from [the release](https://github.com/brandon-cor/agents-on/releases/tag/v0.6.0). The installer verifies SHA-256 checksums, installs per user, creates a Start menu shortcut, starts the tray app, and enables launch at login. The Windows executable is unsigned; normal Windows security and organization policies still apply.
+
+Look for the green or gray light near the clock, including the **^** tray overflow. Drag it into the visible tray if desired. **Left-click toggles** an indefinite session; **right-click opens** 30 minutes, 1 hour, 3 hours, or Custom duration. The dropdown counts remaining seconds. Windows shows the lowercase status on hover rather than permanent text beside the icon.
+
+**Keep awake with lid closed** is enabled by default. While on, the app temporarily sets the current plan's plugged-in and battery lid actions to Do nothing. Turning off, timer expiry, quitting, or a power-plan change restores the previous lid actions. A separate recovery helper restores a saved record if the app crashes. If restoration fails, the app keeps the record and retries; do not uninstall until it completes. Your organization's policy may prevent lid settings from being changed; the app reports that failure instead of bypassing it.
+
+The app starts **off** after every launch and does not resume a previous session automatically. Changing the lid checkbox ends an active session. It does not override manual Sleep, hibernate, screen locking, or Windows' own thermal management.
+
+**Heat cutoff is unavailable on Windows.** Windows does not expose the same reliable live Serious/Critical signal on every laptop. The tray menu states this explicitly; it does not show a protection checkbox that cannot work. Ensure the laptop is asleep before putting it in a bag.
+
+To stop or inspect a running installation from PowerShell:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Agents On\AgentsOn.exe" --off
+& "$env:LOCALAPPDATA\Programs\Agents On\AgentsOn.exe" --check-ui
+```
+
+Run `uninstall.ps1` in `%LOCALAPPDATA%\Programs\Agents On` to restore the app-owned settings, remove the tray app, its shortcuts, and its login entry. Settings and recovery diagnostics stay in `%LOCALAPPDATA%\Agents On`.
+
+## Install on macOS
 
 For **macOS 14 or newer**, on Apple Silicon or Intel. You need an administrator account. No Homebrew, Xcode, or subscriptions required for the prebuilt release.
 
@@ -87,7 +116,7 @@ sleep status  # report the current system sleep setting
 
 The `-d` flag keeps the display awake while open; `-i` prevents idle system sleep. The app adds `-w <app-pid>` so caffeinate exits if the app dies. Lid sleep is handled by `pmset`, not caffeinate. The indicator reads the actual `SleepDisabled` setting every second; clicks update it as soon as the command finishes.
 
-**“Agents on” is a keep-awake label.** It does not launch, pause, or stop your AI agents, and it does not remove your screen-lock password. UI automation that needs an unlocked screen may still require one. This is a Mac app, not a Windows or Linux app.
+**“Agents on” is a keep-awake label.** It does not launch, pause, or stop your AI agents, and it does not remove your screen-lock password. UI automation that needs an unlocked screen may still require one. Windows has its own native tray app described above; Linux is not supported.
 
 ## One-time permission
 
@@ -116,7 +145,21 @@ bash "$HOME/Library/Application Support/Agents On/uninstall.sh"
 
 Uninstall asks for administrator authorization to remove the permission rule, restores normal system sleep, removes the app and login agent, and removes only its own shell configuration line.
 
-## Build from source
+## Build Windows from source
+
+Requires the .NET 10 SDK. Build release packages on Windows:
+
+```powershell
+dotnet run --project windows/AgentsOn.Tests/AgentsOn.Tests.csproj --configuration Release
+./scripts/build-windows.ps1 -Runtime win-x64
+./scripts/build-windows.ps1 -Runtime win-arm64
+```
+
+The Windows workflow also runs the native tray/control smoke test and a real per-user install → upgrade → uninstall check. It creates self-contained ZIPs and checksum files in `dist/`. Core tests use fake power plans to verify crash recovery, failed restores, external setting changes, and timer expiry without modifying the host's lid policy. CI smoke tests exercise the native keep-awake API but do not close a physical laptop lid or heat a machine.
+
+Windows references: [keep-awake requests](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadexecutionstate), [lid-close actions](https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/power-button-and-lid-settings-lid-switch-close-action), [power-setting permissions](https://learn.microsoft.com/en-us/windows/win32/power/administrator-overrides), [why SMBIOS ThermalState is not live telemetry](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-computersystem).
+
+## Build macOS from source
 
 Requires Apple's Xcode Command Line Tools (`xcode-select --install`):
 

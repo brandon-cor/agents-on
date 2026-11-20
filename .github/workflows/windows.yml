@@ -1,0 +1,65 @@
+name: Windows build and check
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Validate PowerShell scripts
+        shell: pwsh
+        run: |
+          foreach ($path in @('windows/install.ps1', 'windows/uninstall.ps1', 'scripts/build-windows.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $path), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          }
+      - name: Check session logic
+        run: dotnet run --project windows/AgentsOn.Tests/AgentsOn.Tests.csproj --configuration Release
+      - name: Build Windows x64 package
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -Runtime win-x64
+      - name: Check native Windows app and package
+        shell: pwsh
+        run: |
+          $archive = Join-Path $PWD 'dist/Agents-On-Windows-win-x64.zip'
+          ./windows/install.ps1 -ArchivePath $archive -CheckOnly
+          $smoke = Join-Path $env:RUNNER_TEMP 'agents-on-smoke'
+          Expand-Archive -LiteralPath $archive -DestinationPath $smoke
+          $binary = Join-Path $smoke 'Agents-On-Windows/AgentsOn.exe'
+          $app = Start-Process -FilePath $binary -ArgumentList '--self-test' -PassThru
+          if (-not $app.WaitForExit(60000)) { throw 'Native self-test timed out.' }
+          if ($app.ExitCode -ne 0) { throw "Native self-test failed ($($app.ExitCode))." }
+      - name: Install, upgrade, and uninstall without elevation
+        shell: pwsh
+        run: |
+          $archive = Join-Path $PWD 'dist/Agents-On-Windows-win-x64.zip'
+          $installed = Join-Path $env:LOCALAPPDATA 'Programs/Agents On/AgentsOn.exe'
+          $uninstall = Join-Path $env:LOCALAPPDATA 'Programs/Agents On/uninstall.ps1'
+          try {
+            ./windows/install.ps1 -ArchivePath $archive -DesktopShortcut
+            if (-not (Test-Path -LiteralPath $installed)) { throw 'Installed app is missing.' }
+            $startup = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Agents On').'Agents On'
+            if ($startup -ne ('"' + $installed + '"')) { throw 'Login startup points to the wrong executable.' }
+            ./windows/install.ps1 -ArchivePath $archive -SkipStartup
+            & $uninstall
+            if (Test-Path -LiteralPath $installed) { throw 'Uninstall left the executable behind.' }
+            if (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Agents On' -ErrorAction SilentlyContinue) { throw 'Uninstall left the login entry behind.' }
+          } finally {
+            if (Test-Path -LiteralPath $uninstall) { & $uninstall }
+          }
+      - name: Build Windows ARM64 package
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -Runtime win-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Agents-On-Windows
+          path: |
+            dist/Agents-On-Windows-*.zip
+            dist/Agents-On-Windows-*.zip.sha256
+          if-no-files-found: error
