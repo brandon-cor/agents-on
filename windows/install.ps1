@@ -45,8 +45,17 @@ function Wait-AppExit([string]$Exe) {
 }
 function Invoke-AppCommand([string]$Exe, [string]$Command) {
     $process = Start-Process -FilePath $Exe -ArgumentList $Command -PassThru
-    if (-not $process.WaitForExit(15000)) { throw "The app did not finish $Command. Close Agents On and retry." }
+    if (-not $process.WaitForExit(40000)) { throw "The app did not finish $Command. Close Agents On and retry." }
     if ($process.ExitCode -ne 0) { throw "The app could not complete $Command (exit $($process.ExitCode))." }
+}
+function Wait-AppReady([string]$Exe) {
+    $failure = $null
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try { Invoke-AppCommand $Exe '--check-ui'; return }
+        catch { $failure = $_ }
+        if ($attempt -lt 3) { Start-Sleep -Seconds 1 }
+    }
+    throw $failure
 }
 try {
     New-Item -ItemType Directory -Path $work -Force | Out-Null
@@ -103,16 +112,22 @@ try {
     Move-Item -LiteralPath $staged -Destination $target
     $replaced = $true
     Start-Process -FilePath $binary | Out-Null
-    Invoke-AppCommand $binary '--check-ui'
+    Wait-AppReady $binary
     $quotedBinary = '"' + $binary + '"'
-    if (-not $SkipStartup) {
-        New-Item -Path $runKey -Force | Out-Null
-        $oldStartup = Get-ItemProperty -LiteralPath $runKey -Name 'Agents On' -ErrorAction SilentlyContinue
-        if ($null -ne $oldStartup) {
-            $startupExisted = $true
-            $startupValue = $oldStartup.'Agents On'
-            $startupKind = (Get-Item -LiteralPath $runKey).GetValueKind('Agents On').ToString()
+    $oldStartup = Get-ItemProperty -LiteralPath $runKey -Name 'Agents On' -ErrorAction SilentlyContinue
+    if ($null -ne $oldStartup) {
+        $startupExisted = $true
+        $startupValue = $oldStartup.'Agents On'
+        $startupKind = (Get-Item -LiteralPath $runKey).GetValueKind('Agents On').ToString()
+    }
+    if ($SkipStartup) {
+        # Disable this installation's existing startup entry during an upgrade.
+        if ($startupExisted -and $startupValue -eq $quotedBinary) {
+            $startupChanged = $true
+            Remove-ItemProperty -LiteralPath $runKey -Name 'Agents On'
         }
+    } else {
+        New-Item -Path $runKey -Force | Out-Null
         $startupChanged = $true
         New-ItemProperty -LiteralPath $runKey -Name 'Agents On' -Value $quotedBinary -PropertyType String -Force | Out-Null
     }

@@ -47,6 +47,7 @@ jobs:
             $startup = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Agents On').'Agents On'
             if ($startup -ne ('"' + $installed + '"')) { throw 'Login startup points to the wrong executable.' }
             ./windows/install.ps1 -ArchivePath $archive -SkipStartup
+            if (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Agents On' -ErrorAction SilentlyContinue) { throw 'SkipStartup did not disable login startup.' }
             & $uninstall
             if (Test-Path -LiteralPath $installed) { throw 'Uninstall left the executable behind.' }
             if (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Agents On' -ErrorAction SilentlyContinue) { throw 'Uninstall left the login entry behind.' }

@@ -10,7 +10,7 @@ if ((Test-Path -LiteralPath $target) -and -not (Test-Path -LiteralPath $binary -
 }
 if (Test-Path -LiteralPath $binary) {
     $process = Start-Process -FilePath $binary -ArgumentList '--quit' -PassThru
-    if (-not $process.WaitForExit(15000)) { throw 'Agents On did not stop. Close it before uninstalling.' }
+    if (-not $process.WaitForExit(40000)) { throw 'Agents On did not stop. Close it before uninstalling.' }
     if ($process.ExitCode -ne 0) { throw 'Agents On could not release its keep-awake request; uninstall cancelled.' }
     $until = [DateTime]::UtcNow.AddSeconds(15)
     do {
