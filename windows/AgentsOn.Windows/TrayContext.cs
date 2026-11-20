@@ -42,6 +42,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly CancellationTokenSource shutdown=new();
     private readonly Icon onIcon=CreateLight(true),offIcon=CreateLight(false);
     private bool closing;
+    private bool disposed;
     private string? previousError;
     public int ExitCode {get;private set;}
 
@@ -146,8 +147,7 @@ internal sealed class TrayContext : ApplicationContext
         using var duration=new DurationForm();
         if(duration.ShowIcon)throw new Exception("Custom duration shows a placeholder icon.");
     }
-    private void PowerChanged
-(object? sender,PowerModeChangedEventArgs e)
+    private void PowerChanged(object? sender,PowerModeChangedEventArgs e)
     {
         if(e.Mode==PowerModes.Suspend && !closing) dispatch.BeginInvoke(()=>{try{session.Stop();}catch(Exception ex){previousError=ex.Message;}Refresh();});
     }
@@ -216,8 +216,9 @@ internal sealed class TrayContext : ApplicationContext
     [DllImport("user32.dll")] private static extern bool DestroyIcon(IntPtr icon);
     protected override void Dispose(bool disposing)
     {
-        if(disposing)
+        if(disposing && !disposed)
         {
+            disposed=true;
             try {lease.Release();}catch {ExitCode=1;}
             shutdown.Cancel();tick.Dispose();icon.Visible=false;icon.Dispose();menu.Dispose();
             SystemEvents.PowerModeChanged-=PowerChanged;Application.ApplicationExit-=OnApplicationExit;
