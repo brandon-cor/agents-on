@@ -22,6 +22,8 @@ Look for the green or gray light near the clock, including the **^** tray overfl
 
 **Keep awake with lid closed** is enabled by default. While on, the app temporarily sets the current plan's plugged-in and battery lid actions to Do nothing. Turning off, timer expiry, quitting, or a power-plan change restores the previous lid actions. A separate recovery helper restores a saved record if the app crashes. If restoration fails, the app keeps the record and retries; do not uninstall until it completes. Your organization's policy may prevent lid settings from being changed; the app reports that failure instead of bypassing it.
 
+Only one Windows account can run Agents On at a time, because power plans are shared across the computer. Close the other account's copy before starting another.
+
 The app starts **off** after every launch and does not resume a previous session automatically. Changing the lid checkbox ends an active session. It does not override manual Sleep, hibernate, screen locking, or Windows' own thermal management.
 
 **Heat cutoff is unavailable on Windows.** Windows does not expose the same reliable live Serious/Critical signal on every laptop. The tray menu states this explicitly; it does not show a protection checkbox that cannot work. Ensure the laptop is asleep before putting it in a bag.
