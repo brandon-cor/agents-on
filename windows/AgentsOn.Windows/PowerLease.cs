@@ -14,7 +14,7 @@ internal static class AppPaths
     public static readonly string Data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Agents On");
     public static readonly string UserId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(WindowsIdentity.GetCurrent().User!.Value)))[..24];
     public static readonly string Pipe = "AgentsOn-" + UserId;
-    public static readonly string Mutex = @"Global\AgentsOn-" + UserId;
+    public static readonly string Mutex = @"Global\AgentsOn.PowerOwner";
 }
 
 internal sealed class JournalStore : ILidJournalStore
@@ -145,6 +145,8 @@ internal static class RecoveryWatchdog
     {
         if(args.Length!=4 || !int.TryParse(args[1],out var pid) || !long.TryParse(args[2],out var ticks) ||
            !args[3].StartsWith(@"Local\AgentsOn.Ready.",StringComparison.Ordinal)) return 2;
+        // Retain the shared mutex handle before readiness so its security boundary survives parent exit.
+        using var instance=new Mutex(false,AppPaths.Mutex);
         // The child never owns an awake request; it only restores a saved lid policy after its parent exits.
         try
         {
@@ -158,8 +160,7 @@ internal static class RecoveryWatchdog
         catch(Exception) { return 2; }
         var policy=new LidPolicyLease(new WindowsLidPolicy(),new JournalStore());
         // Serialize with a newly launched copy so it cannot overwrite a pending recovery record.
-        using var instance=new Mutex(false,AppPaths.Mutex);
-while(true)
+        while(true)
         {
             try {instance.WaitOne();}catch(AbandonedMutexException) { }
             try

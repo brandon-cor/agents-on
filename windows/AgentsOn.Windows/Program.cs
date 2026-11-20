@@ -11,7 +11,8 @@ internal static class Program
     [STAThread]
     static int Main(string[] args)
     {
-        if(args.FirstOrDefault()=="--watch-parent") return RecoveryWatchdog.Run(args);
+        if(args.FirstOrDefault()=="--watch-parent") {try{return RecoveryWatchdog.Run(args);}catch{return 2;}}
+        if(args.FirstOrDefault()=="--self-test-lock") return SmokeTests.CheckLock();
         ApplicationConfiguration.Initialize();
         if(args.Contains("--self-test")) return SmokeTests.Run();
         if(args.Length>0)
@@ -19,10 +20,22 @@ internal static class Program
             var command=args[0] switch {"--check-ui" or "--status"=>"status","--quit"=>"quit","--on"=>"on","--off"=>"off",_=>null};
             return command is null ? 2 : Send(command);
         }
-        using var singleton=new Mutex(false,AppPaths.Mutex);
+        Mutex singleton;
+        try {singleton=new Mutex(false,AppPaths.Mutex);}
+        catch(UnauthorizedAccessException)
+        {
+            MessageBox.Show("Another Windows account is running Agents On or restoring its lid settings. Close that copy before starting this one.","Agents On",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            return 1;
+        }
+        using var ownedMutex=singleton;
         bool acquired;
         try { acquired=singleton.WaitOne(0); } catch(AbandonedMutexException){acquired=true;}
-        if(!acquired) return Send("status");
+        if(!acquired)
+        {
+            var status=Send("status");
+            if(status!=0)MessageBox.Show("Agents On is already running in another session, or is finishing recovery. Wait for recovery or close the other copy before starting this one.","Agents On",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            return status;
+        }
         try
         {
             using var context=new TrayContext();
@@ -65,7 +78,9 @@ internal static class Program
         {
             if(command=="quit")
             {
-                using var stopped=new Mutex(false,AppPaths.Mutex);
+                try
+                {
+                    using var stopped=new Mutex(false,AppPaths.Mutex);
                 bool got;
                 try {got=stopped.WaitOne(0);}catch(AbandonedMutexException){got=true;}
                 if(got)
@@ -74,6 +89,8 @@ internal static class Program
                     catch(Exception recovery){Console.Error.WriteLine(recovery.Message);return 1;}
                     finally{stopped.ReleaseMutex();}
                 }
+                }
+                catch(UnauthorizedAccessException){Console.Error.WriteLine("Another Windows account is running Agents On or restoring lid settings.");return 1;}
             }
             Console.Error.WriteLine("Agents On did not respond: "+ex.Message);return 1;
         }

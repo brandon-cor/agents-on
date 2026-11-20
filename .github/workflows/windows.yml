@@ -59,6 +59,60 @@ jobs:
             if (-not (Test-Path -LiteralPath $installed)) { throw 'Installed app is missing.' }
             $startup = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Agents On').'Agents On'
             if ($startup -ne ('"' + $installed + '"')) { throw 'Login startup points to the wrong executable.' }
+            # A different standard user must not acquire a second machine-wide owner.
+            # The previous per-SID mutex would let this probe acquire its own lock.
+            $probeName = 'ao' + [guid]::NewGuid().ToString('N').Substring(0, 12)
+            $probeFolder = Join-Path $env:PUBLIC ('agents-on-cross-user-' + [guid]::NewGuid().ToString('N'))
+            $probeUser = $null
+            $probeProcess = $null
+            $startedSecondaryLogon = $false
+            try {
+              $password = 'Aa1!' + [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+              $securePassword = ConvertTo-SecureString -String $password -AsPlainText -Force
+              $password = $null
+              $probeUser = New-LocalUser -Name $probeName -Password $securePassword -AccountNeverExpires -PasswordNeverExpires -UserMayNotChangePassword
+              $usersGroup = Get-LocalGroup -SID 'S-1-5-32-545'
+              if (-not (Get-LocalGroupMember -Group $usersGroup | Where-Object { $_.SID -eq $probeUser.SID })) {
+                Add-LocalGroupMember -Group $usersGroup -Member $probeUser
+              }
+              $probeTemp = Join-Path $probeFolder 'temp'
+              $probeBundle = Join-Path $probeFolder 'bundle'
+              $probeData = Join-Path $probeFolder 'appdata'
+              New-Item -ItemType Directory -Path $probeFolder, $probeTemp, $probeBundle, $probeData -Force | Out-Null
+              $probeBinary = Join-Path $probeFolder 'AgentsOn.exe'
+              Copy-Item -LiteralPath $installed -Destination $probeBinary
+              $probeAcl = '*' + $probeUser.SID.Value + ':(OI)(CI)M'
+              & icacls.exe $probeFolder /grant $probeAcl /T /C | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw 'Could not grant the disposable user access to its probe folder.' }
+              if ((Get-Service -Name seclogon).Status -ne 'Running') {
+                Start-Service -Name seclogon
+                $startedSecondaryLogon = $true
+              }
+              $credential = [pscredential]::new(($env:COMPUTERNAME + [IO.Path]::DirectorySeparatorChar + $probeName), $securePassword)
+              $probeEnvironment = @{ TEMP = $probeTemp; TMP = $probeTemp; DOTNET_BUNDLE_EXTRACT_BASE_DIR = $probeBundle; LOCALAPPDATA = $probeData }
+              $probeProcess = Start-Process -FilePath $probeBinary -Credential $credential -LoadUserProfile -WorkingDirectory $probeFolder -Environment $probeEnvironment -ArgumentList '--self-test-lock' -PassThru
+              if (-not $probeProcess.WaitForExit(30000)) { throw 'Cross-account ownership probe timed out.' }
+              if ($probeProcess.ExitCode -ne 0) { throw "A different Windows account was not blocked from owning power settings (exit $($probeProcess.ExitCode))." }
+              Write-Host 'A different standard Windows user was blocked by the machine-wide power owner.'
+            } finally {
+              $cleanupErrors = @()
+              try {
+                if ($null -ne $probeProcess) {
+                  if (-not $probeProcess.HasExited) { $probeProcess.Kill($true); $probeProcess.WaitForExit() }
+                  $probeProcess.Dispose()
+                }
+              } catch { $cleanupErrors += "Probe process cleanup failed: $($_.Exception.Message)" }
+              try {
+                if ($null -ne $probeUser) { Remove-LocalUser -SID $probeUser.SID -ErrorAction Stop }
+              } catch { $cleanupErrors += "Disposable user cleanup failed: $($_.Exception.Message)" }
+              try {
+                if (Test-Path -LiteralPath $probeFolder) { Remove-Item -LiteralPath $probeFolder -Recurse -Force -ErrorAction Stop }
+              } catch { $cleanupErrors += "Probe folder cleanup failed: $($_.Exception.Message)" }
+              try {
+                if ($startedSecondaryLogon -and (Get-Service -Name seclogon).CanStop) { Stop-Service -Name seclogon -ErrorAction Stop }
+              } catch { Write-Warning 'Secondary Logon is not stoppable on this disposable hosted runner; the VM will be discarded after the job.' }
+              if ($cleanupErrors.Count -gt 0) { throw ($cleanupErrors -join '; ') }
+            }
             ./windows/install.ps1 -ArchivePath $archive -SkipStartup
             if (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Agents On' -ErrorAction SilentlyContinue) { throw 'SkipStartup did not disable login startup.' }
             & $uninstall
