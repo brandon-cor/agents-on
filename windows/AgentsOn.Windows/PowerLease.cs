@@ -14,7 +14,7 @@ internal static class AppPaths
     public static readonly string Data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Agents On");
     public static readonly string UserId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(WindowsIdentity.GetCurrent().User!.Value)))[..24];
     public static readonly string Pipe = "AgentsOn-" + UserId;
-    public static readonly string Mutex = @"Local\AgentsOn-" + UserId;
+    public static readonly string Mutex = @"Global\AgentsOn-" + UserId;
 }
 
 internal sealed class JournalStore : ILidJournalStore
