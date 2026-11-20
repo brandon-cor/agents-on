@@ -2,3 +2,14 @@ dist/
 .DS_Store
 **/bin/
 **/obj/
+
+# Keep local credentials out of public commits.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+credentials.json
+secrets.json
