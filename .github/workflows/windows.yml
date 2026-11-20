@@ -2,12 +2,18 @@ name: Windows build and check
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: '10.0.x'
       - name: Validate PowerShell scripts
@@ -32,8 +38,11 @@ jobs:
           $smoke = Join-Path $env:RUNNER_TEMP 'agents-on-smoke'
           Expand-Archive -LiteralPath $archive -DestinationPath $smoke
           $binary = Join-Path $smoke 'Agents-On-Windows/AgentsOn.exe'
-          $app = Start-Process -FilePath $binary -ArgumentList '--self-test' -PassThru
+          $stdout = Join-Path $env:RUNNER_TEMP 'agents-on-selftest.out'
+          $stderr = Join-Path $env:RUNNER_TEMP 'agents-on-selftest.err'
+          $app = Start-Process -FilePath $binary -ArgumentList '--self-test' -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           if (-not $app.WaitForExit(60000)) { throw 'Native self-test timed out.' }
+          Get-Content -LiteralPath $stdout, $stderr -ErrorAction SilentlyContinue
           if ($app.ExitCode -ne 0) { throw "Native self-test failed ($($app.ExitCode))." }
       - name: Install, upgrade, and uninstall without elevation
         shell: pwsh
@@ -57,7 +66,7 @@ jobs:
       - name: Build Windows ARM64 package
         shell: pwsh
         run: ./scripts/build-windows.ps1 -Runtime win-arm64
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Agents-On-Windows
           path: |
