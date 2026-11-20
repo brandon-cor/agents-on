@@ -109,8 +109,8 @@ jobs:
                 if (Test-Path -LiteralPath $probeFolder) { Remove-Item -LiteralPath $probeFolder -Recurse -Force -ErrorAction Stop }
               } catch { $cleanupErrors += "Probe folder cleanup failed: $($_.Exception.Message)" }
               try {
-                if ($startedSecondaryLogon) { Stop-Service -Name seclogon -ErrorAction Stop }
-              } catch { $cleanupErrors += "Secondary Logon cleanup failed: $($_.Exception.Message)" }
+                if ($startedSecondaryLogon -and (Get-Service -Name seclogon).CanStop) { Stop-Service -Name seclogon -ErrorAction Stop }
+              } catch { Write-Warning 'Secondary Logon is not stoppable on this disposable hosted runner; the VM will be discarded after the job.' }
               if ($cleanupErrors.Count -gt 0) { throw ($cleanupErrors -join '; ') }
             }
             ./windows/install.ps1 -ArchivePath $archive -SkipStartup
