@@ -23,12 +23,15 @@ jobs:
       - name: Validate PowerShell scripts
         shell: pwsh
         run: |
-          foreach ($path in @('windows/install.ps1', 'windows/uninstall.ps1', 'scripts/build-windows.ps1')) {
+          foreach ($path in @('windows/install.ps1', 'windows/uninstall.ps1', 'scripts/build-windows.ps1', 'scripts/check-windows-install.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $path), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count -gt 0) { throw ($errors | Out-String) }
           }
+      - name: Check real Windows directory-lock retries
+        shell: pwsh
+        run: ./scripts/check-windows-install.ps1
       - name: Check session logic
         run: dotnet run --project windows/AgentsOn.Tests/AgentsOn.Tests.csproj --configuration Release
       - name: Build Windows x64 package
