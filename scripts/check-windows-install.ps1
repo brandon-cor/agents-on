@@ -20,20 +20,28 @@ if ($moveFunction.Count -ne 1) { throw 'The installer must define one Move-AppDi
 Add-Type -TypeDefinition @'
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Win32.SafeHandles;
 public static class AgentsOnDirectoryLockFixture
 {
-    // A real directory handle denying FILE_SHARE_DELETE prevents an atomic rename.
+    // Read access participates in Windows sharing checks; metadata-only access does not.
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern SafeFileHandle CreateFile(string path, uint access, uint share,
         IntPtr security, uint disposition, uint flags, IntPtr template);
     public static SafeFileHandle Lock(string path)
     {
-        var handle = CreateFile(path, 0, 3, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero);
+        var handle = CreateFile(path, 0x80000000, 3, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero);
         if (handle.IsInvalid) { var error = Marshal.GetLastWin32Error(); handle.Dispose(); throw new Win32Exception(error); }
         return handle;
+    }
+    public static void VerifyRenameIsLocked(string source, string destination)
+    {
+        try { Directory.Move(source, destination); }
+        catch (IOException error) when ((error.HResult & 0xFFFF) == 32) { return; }
+        catch (UnauthorizedAccessException) { return; }
+        throw new Exception("The native fixture did not establish a rename-blocking directory handle.");
     }
     public static Timer ReleaseDuringBackoff(SafeFileHandle handle)
     {
@@ -70,6 +78,7 @@ try {
     $destination = Join-Path $work 'transient-destination'
     New-Source $source
     $locked = [AgentsOnDirectoryLockFixture]::Lock($source)
+    [AgentsOnDirectoryLockFixture]::VerifyRenameIsLocked($source, $destination)
     $script:releaseOnBackoff = $locked
     Move-AppDirectory $source $destination
     Assert-True ($script:backoffs -gt 0) 'The temporary lock did not exercise a retry.'
@@ -85,6 +94,7 @@ try {
     $destination = Join-Path $work 'persistent-destination'
     New-Source $source
     $locked = [AgentsOnDirectoryLockFixture]::Lock($source)
+    [AgentsOnDirectoryLockFixture]::VerifyRenameIsLocked($source, $destination)
     $script:backoffs = 0
     $failed = $false
     try { Move-AppDirectory $source $destination } catch { $failed = $true }
