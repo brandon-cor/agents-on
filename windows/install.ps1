@@ -43,6 +43,21 @@ function Wait-AppExit([string]$Exe) {
     } while ([DateTime]::UtcNow -lt $until)
     throw 'Agents On is still restoring sleep settings. Wait for it to finish before updating.'
 }
+function Move-AppDirectory([string]$Source, [string]$Destination) {
+    # An exited executable can briefly remain locked by another Windows component.
+    # Directory.Move keeps these same-volume swaps atomic and never merges folders.
+    for ($attempt = 1; $attempt -le 20; $attempt++) {
+        try { [IO.Directory]::Move($Source, $Destination); return }
+        catch {
+            $exception = $_.Exception
+            while ($null -ne $exception.InnerException) { $exception = $exception.InnerException }
+            $nativeError = $exception.HResult -band 0xFFFF
+            $fileAccessError = $exception -is [IO.IOException] -or $exception -is [UnauthorizedAccessException]
+            if (-not $fileAccessError -or $nativeError -notin @(5, 32, 33, 1224) -or $attempt -eq 20) { throw }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+}
 function Invoke-AppCommand([string]$Exe, [string]$Command) {
     $process = Start-Process -FilePath $Exe -ArgumentList $Command -PassThru
     if (-not $process.WaitForExit(40000)) { throw "The app did not finish $Command. Close Agents On and retry." }
@@ -108,8 +123,8 @@ try {
         throw "The existing folder is not a recognized Agents On installation: $target"
     }
     if (Test-Path -LiteralPath $binary) { Invoke-AppCommand $binary '--quit'; Wait-AppExit $binary }
-    if (Test-Path -LiteralPath $target) { Move-Item -LiteralPath $target -Destination $backup; $hasBackup = $true }
-    Move-Item -LiteralPath $staged -Destination $target
+    if (Test-Path -LiteralPath $target) { Move-AppDirectory $target $backup; $hasBackup = $true }
+    Move-AppDirectory $staged $target
     $replaced = $true
     Start-Process -FilePath $binary | Out-Null
     Wait-AppReady $binary
@@ -183,7 +198,7 @@ try {
         if ($hasBackup) {
             try {
                 Remove-Item -LiteralPath $target -Recurse -Force
-                Move-Item -LiteralPath $backup -Destination $target
+                Move-AppDirectory $backup $target
                 $hasBackup = $false
                 Start-Process -FilePath $binary | Out-Null
                 Write-Warning 'The update failed; the previous app was restored.'
@@ -192,7 +207,7 @@ try {
             try { Remove-Item -LiteralPath $target -Recurse -Force } catch { Write-Warning $_ }
         }
     } elseif ($hasBackup) {
-        Move-Item -LiteralPath $backup -Destination $target
+        Move-AppDirectory $backup $target
         $hasBackup = $false
         Start-Process -FilePath $binary | Out-Null
     }
