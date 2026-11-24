@@ -34,7 +34,7 @@ internal sealed class ModernTheme
             Hover = SystemColors.Highlight;
             Accent = SystemColors.Highlight;
             AccentText = SystemColors.HighlightText;
-            Error = SystemColors.WindowText;
+            Error = SystemColors.MenuText;
             return;
         }
 
