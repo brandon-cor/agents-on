@@ -268,7 +268,7 @@ internal sealed class DurationEntryPanel : Panel
         using var path = ModernTheme.RoundedRect(new RectangleF(1, 1, ClientSize.Width - 2, ClientSize.Height - 2), theme.HighContrast ? 0 : ModernTheme.Scale(8, DeviceDpi));
         using var fill = new SolidBrush(theme.Input);
         e.Graphics.FillPath(fill, path);
-        using var border = new Pen(invalid ? theme.Error : field.Focused ? theme.Accent : theme.Border, field.Focused || invalid ? 2 : 1);
+        using var border = new Pen(invalid ? (theme.HighContrast ? SystemColors.WindowText : theme.Error) : field.Focused ? theme.Accent : theme.Border, field.Focused || invalid ? 2 : 1);
         e.Graphics.DrawPath(border, path);
     }
 }
