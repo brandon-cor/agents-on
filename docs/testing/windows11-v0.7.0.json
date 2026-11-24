@@ -1,0 +1,119 @@
+{
+  "version": "0.7.0",
+  "publishedSourceCommit": "4904ecdb1cf6affbfd7967a79f2b5bb2e6091ad6",
+  "testRun": "https://github.com/brandon-cor/agents-on/actions/runs/45486019484",
+  "os": {
+    "caption": "Microsoft Windows 11 Enterprise",
+    "productType": 1,
+    "build": 26200,
+    "displayVersion": "25H2",
+    "ubr": 9974,
+    "osArchitecture": "Arm64",
+    "processArchitecture": "Arm64",
+    "imageOS": "win11-vs2026-arm64",
+    "imageVersion": "20261115.219.1"
+  },
+  "cases": [
+    {
+      "runtime": "win-arm64",
+      "execution": "native ARM64",
+      "package": {
+        "zip": "Agents-On-Windows-win-arm64.zip",
+        "sha256": "91147bfa39edda637d23041c5c201027061b197296c65054542f2093d2499d69",
+        "peMachine": "0xAA64"
+      },
+      "steps": [
+        {
+          "name": "actual-windows11-host",
+          "status": "passed"
+        },
+        {
+          "name": "published-package-integrity",
+          "status": "passed"
+        },
+        {
+          "name": "published-native-self-test",
+          "status": "passed"
+        },
+        {
+          "name": "published-install-and-starts-off",
+          "status": "passed"
+        },
+        {
+          "name": "published-on-off-lid-restoration",
+          "status": "passed"
+        },
+        {
+          "name": "published-watchdog-crash-restoration",
+          "status": "passed"
+        },
+        {
+          "name": "published-upgrade-and-skip-startup",
+          "status": "passed"
+        },
+        {
+          "name": "published-uninstall",
+          "status": "passed"
+        },
+        {
+          "name": "original-lid-values-restored",
+          "status": "passed"
+        }
+      ],
+      "originalPowerRestored": true
+    },
+    {
+      "runtime": "win-x64",
+      "execution": "x64 emulation on ARM64",
+      "package": {
+        "zip": "Agents-On-Windows-win-x64.zip",
+        "sha256": "8be376ffbd363f9ececa9b89917cc5e5039c81d157f0ab65a432b44d8f105917",
+        "peMachine": "0x8664"
+      },
+      "steps": [
+        {
+          "name": "actual-windows11-host",
+          "status": "passed"
+        },
+        {
+          "name": "published-package-integrity",
+          "status": "passed"
+        },
+        {
+          "name": "published-native-self-test",
+          "status": "passed"
+        },
+        {
+          "name": "published-install-and-starts-off",
+          "status": "passed"
+        },
+        {
+          "name": "published-on-off-lid-restoration",
+          "status": "passed"
+        },
+        {
+          "name": "published-watchdog-crash-restoration",
+          "status": "passed"
+        },
+        {
+          "name": "published-upgrade-and-skip-startup",
+          "status": "passed"
+        },
+        {
+          "name": "published-uninstall",
+          "status": "passed"
+        },
+        {
+          "name": "original-lid-values-restored",
+          "status": "passed"
+        }
+      ],
+      "originalPowerRestored": true
+    }
+  ],
+  "limitations": [
+    "Windows 11 25H2 was tested; 26H2 was not directly tested.",
+    "Native Intel/AMD Windows 11 hardware was not tested.",
+    "Physical laptop lid closure and temperatures cannot be verified by this VM test."
+  ]
+}
