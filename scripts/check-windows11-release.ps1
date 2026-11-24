@@ -251,9 +251,24 @@ public static class AgentsOnWin11Power
         Wait-OwnedExit $installed
         Record-Step 'published-watchdog-crash-restoration' 'passed' ([ordered]@{ terminatedUiProcess = $uiProcessId; restored = '1/1'; recoveryJournalRemoved = $true })
     }
+    # Exercise an update while the existing installation is running and holding a lease.
+    if (@(Owned-Processes $installed).Count -eq 0) { Start-Process -FilePath $installed | Out-Null }
+    $beforeUpgrade = App-Status $installed
+    Assert-True (-not $beforeUpgrade.active) 'The pre-upgrade app did not start off.'
+    $upgradeOwners = @(Owned-Processes $installed)
+    Assert-True ($upgradeOwners.Count -eq 1) 'The pre-upgrade tray owner was not unique.'
+    $upgradeUiProcessId = [int]$upgradeOwners[0].ProcessId
+    if ($null -eq $lidUnavailable) {
+        $upgradeSession = (Invoke-App $installed '--on') | ConvertFrom-Json
+        Assert-True ($upgradeSession.ok -and $upgradeSession.active) 'The active upgrade session did not start.'
+        Wait-Power 0 0 | Out-Null
+    }
     & $packageInstaller -ArchivePath $archive -SkipStartup
     $upgraded = App-Status $installed
     Assert-True (-not $upgraded.active) 'The upgraded published app did not start off.'
+    $newOwners = @(Owned-Processes $installed)
+    Assert-True ($newOwners.Count -eq 1 -and [int]$newOwners[0].ProcessId -ne $upgradeUiProcessId) 'The upgrade did not replace the running tray process.'
+    if ($null -eq $lidUnavailable) { Wait-Power 1 1 $true | Out-Null }
     Assert-True ($null -eq (Get-ItemProperty -LiteralPath $runKey -Name 'Agents On' -ErrorAction SilentlyContinue)) 'SkipStartup did not remove the login entry.'
     Record-Step 'published-upgrade-and-skip-startup' 'passed' $upgraded
     & (Join-Path $installedRoot 'uninstall.ps1')
