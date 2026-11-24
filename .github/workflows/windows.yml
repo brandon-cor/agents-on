@@ -47,7 +47,7 @@ jobs:
       - name: Capture light and dark Windows controls
         shell: pwsh
         run: dotnet run --project tools/WindowsUiPreview --configuration Release -- dist/windows-preview
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Agents-On-Windows-UI
           path: dist/windows-preview
@@ -142,7 +142,7 @@ jobs:
       - name: Build Windows ARM64 package
         shell: pwsh
         run: ./scripts/build-windows.ps1 -Runtime win-arm64
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Agents-On-Windows
           path: |
@@ -191,7 +191,7 @@ jobs:
             dotnet run --project release-source/tools/WindowsUiPreview --configuration Release -- "dist/windows11-$env:AGENTS_RUNTIME/ui"
             if ($LASTEXITCODE -ne 0) { throw 'Windows 11 UI capture failed.' }
           } finally { $env:GITHUB_SHA = $previousCommit }
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: Agents-On-Windows11-${{ matrix.runtime }}
