@@ -4,6 +4,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Published version to test on Windows 11 (blank runs the normal build)'
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -11,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.release_version == ''
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -23,7 +30,7 @@ jobs:
       - name: Validate PowerShell scripts
         shell: pwsh
         run: |
-          foreach ($path in @('windows/install.ps1', 'windows/uninstall.ps1', 'scripts/build-windows.ps1', 'scripts/check-windows-install.ps1')) {
+          foreach ($path in @('windows/install.ps1', 'windows/uninstall.ps1', 'scripts/build-windows.ps1', 'scripts/check-windows-install.ps1', 'scripts/check-windows11-release.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $path), [ref]$tokens, [ref]$errors) | Out-Null
@@ -141,4 +148,52 @@ jobs:
           path: |
             dist/Agents-On-Windows-*.zip
             dist/Agents-On-Windows-*.zip.sha256
+          if-no-files-found: error
+  windows11-release:
+    if: github.event_name == 'workflow_dispatch' && inputs.release_version != ''
+    runs-on: windows-11-arm
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [win-arm64, win-x64]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test the published release on Windows 11
+        shell: pwsh
+        env:
+          AGENTS_RELEASE_VERSION: ${{ inputs.release_version }}
+          AGENTS_RUNTIME: ${{ matrix.runtime }}
+        run: ./scripts/check-windows11-release.ps1 -Version $env:AGENTS_RELEASE_VERSION -Runtime $env:AGENTS_RUNTIME
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: v${{ inputs.release_version }}
+          path: release-source
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Capture the release source controls on Windows 11
+        shell: pwsh
+        env:
+          AGENTS_RUNTIME: ${{ matrix.runtime }}
+        run: |
+          $sourceCommit = git -C release-source rev-parse HEAD
+          if (-not (Test-Path release-source/tools/WindowsUiPreview/WindowsUiPreview.csproj)) {
+            Write-Host 'This older release does not include the optional UI capture helper.'
+            exit 0
+          }
+          $previousCommit = $env:GITHUB_SHA
+          try {
+            $env:GITHUB_SHA = $sourceCommit
+            dotnet run --project release-source/tools/WindowsUiPreview --configuration Release -- "dist/windows11-$env:AGENTS_RUNTIME/ui"
+            if ($LASTEXITCODE -ne 0) { throw 'Windows 11 UI capture failed.' }
+          } finally { $env:GITHUB_SHA = $previousCommit }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: Agents-On-Windows11-${{ matrix.runtime }}
+          path: dist/windows11-${{ matrix.runtime }}
           if-no-files-found: error
