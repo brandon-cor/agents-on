@@ -13,12 +13,14 @@ For **Windows 11**, on Intel/AMD x64 or ARM64. The app includes its runtime; no 
 Paste this into **PowerShell**:
 
 ```powershell
-& ([scriptblock]::Create((Invoke-RestMethod https://raw.githubusercontent.com/brandon-cor/agents-on/v0.6.0/windows/install.ps1)))
+& ([scriptblock]::Create((Invoke-RestMethod https://raw.githubusercontent.com/brandon-cor/agents-on/v0.7.0/windows/install.ps1)))
 ```
 
-Or download the matching **Agents-On-Windows-win-x64.zip** or **Agents-On-Windows-win-arm64.zip** from [the release](https://github.com/brandon-cor/agents-on/releases/tag/v0.6.0). The installer verifies SHA-256 checksums, installs per user, creates a Start menu shortcut, starts the tray app, and enables launch at login. The Windows executable is unsigned; normal Windows security and organization policies still apply.
+Or download the matching **Agents-On-Windows-win-x64.zip** or **Agents-On-Windows-win-arm64.zip** from [the release](https://github.com/brandon-cor/agents-on/releases/tag/v0.7.0). The installer verifies SHA-256 checksums, installs per user, creates a Start menu shortcut, starts the tray app, and enables launch at login. The Windows executable is unsigned; normal Windows security and organization policies still apply.
 
 Look for the green or gray light near the clock, including the **^** tray overflow. Drag it into the visible tray if desired. **Left-click toggles** an indefinite session; **right-click opens** 30 minutes, 1 hour, 3 hours, or Custom duration. The dropdown counts remaining seconds. Windows shows the lowercase status on hover rather than permanent text beside the icon.
+
+The menu and custom timer use a Windows 11-inspired layout with rounded surfaces, larger click targets, and light/dark colors that follow Windows. Custom duration has separate zero-filled Hours and Minutes fields, inline validation, and keyboard support for Tab, Enter, and Escape. Windows high-contrast colors are respected.
 
 **Keep awake with lid closed** is enabled by default. While on, the app temporarily sets the current plan's plugged-in and battery lid actions to Do nothing. Turning off, timer expiry, quitting, or a power-plan change restores the previous lid actions. A separate recovery helper restores a saved record if the app crashes. If restoration fails, the app keeps the record and retries; do not uninstall until it completes. Your organization's policy may prevent lid settings from being changed; the app reports that failure instead of bypassing it.
 
