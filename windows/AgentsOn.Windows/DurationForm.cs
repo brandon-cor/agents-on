@@ -66,6 +66,7 @@ internal sealed class DurationForm : Form
         error.SetBounds(28, 221, 384, 36);
         error.Font = OwnFont(9.5f);
         error.UseMnemonic = false;
+        error.LiveSetting = System.Windows.Forms.Automation.AutomationLiveSetting.Assertive;
         error.AccessibleName = "Duration validation";
 
         cancel = new DurationActionButton("&Cancel", theme) { TabIndex = 2, DialogResult = DialogResult.Cancel };
@@ -249,7 +250,7 @@ internal sealed class DurationEntryPanel : Panel
         theme = value;
         BackColor = theme.Surface;
         field.BackColor = theme.Input;
-        field.ForeColor = theme.Text;
+        field.ForeColor = theme.HighContrast ? SystemColors.WindowText : theme.Text;
         Invalidate();
     }
 
@@ -307,8 +308,15 @@ internal sealed class DurationActionButton : Button
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var color = primary ? (hovered ? ControlPaint.Light(theme.Accent, .06f) : theme.Accent) : hovered ? theme.Hover : theme.Input;
+        var textColor = ForeColor;
         if (close && !hovered) color = theme.Surface;
         if (pressed) color = ControlPaint.Dark(color, .08f);
+        if (theme.HighContrast)
+        {
+            if (primary || hovered || pressed) { color = SystemColors.Highlight; textColor = SystemColors.HighlightText; }
+            else if (close) { color = theme.Surface; textColor = theme.Text; }
+            else { color = SystemColors.Window; textColor = SystemColors.WindowText; }
+        }
         using var path = ModernTheme.RoundedRect(new RectangleF(.5f, .5f, Width - 1, Height - 1), theme.HighContrast ? 0 : ModernTheme.Scale(close ? 6 : 8, DeviceDpi));
         using var fill = new SolidBrush(color);
         e.Graphics.FillPath(fill, path);
@@ -321,7 +329,7 @@ internal sealed class DurationActionButton : Button
         {
             var center = new PointF(Width / 2f, Height / 2f);
             var half = ModernTheme.Scale(4, DeviceDpi);
-            using var pen = new Pen(theme.Text, ModernTheme.Scale(1, DeviceDpi));
+            using var pen = new Pen(textColor, ModernTheme.Scale(1, DeviceDpi));
             e.Graphics.DrawLine(pen, center.X - half, center.Y - half, center.X + half, center.Y + half);
             e.Graphics.DrawLine(pen, center.X + half, center.Y - half, center.X - half, center.Y + half);
         }
@@ -329,13 +337,13 @@ internal sealed class DurationActionButton : Button
         {
             var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
             if (!ShowKeyboardCues) flags |= TextFormatFlags.HidePrefix;
-            TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, ForeColor, flags);
+            TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, textColor, flags);
         }
         if (Focused && ShowFocusCues)
         {
             var focus = ClientRectangle;
             focus.Inflate(-ModernTheme.Scale(5, DeviceDpi), -ModernTheme.Scale(5, DeviceDpi));
-            ControlPaint.DrawFocusRectangle(e.Graphics, focus, ForeColor, color);
+            ControlPaint.DrawFocusRectangle(e.Graphics, focus, textColor, color);
         }
     }
 }
