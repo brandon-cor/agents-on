@@ -14,6 +14,7 @@ internal static class Program
         if(args.FirstOrDefault()=="--watch-parent") {try{return RecoveryWatchdog.Run(args);}catch{return 2;}}
         if(args.FirstOrDefault()=="--self-test-lock") return SmokeTests.CheckLock();
         ApplicationConfiguration.Initialize();
+        Application.SetColorMode(SystemColorMode.System);
         if(args.Contains("--self-test")) return SmokeTests.Run();
         if(args.Length>0)
         {
@@ -95,5 +96,5 @@ internal static class Program
             Console.Error.WriteLine("Agents On did not respond: "+ex.Message);return 1;
         }
     }
-    internal static string Version => typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.6.0";
+    internal static string Version => typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.7.0";
 }

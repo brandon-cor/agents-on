@@ -32,7 +32,7 @@ internal sealed class TrayContext : ApplicationContext
 {
     private readonly Control dispatch=new();
     private readonly NotifyIcon icon=new();
-    private readonly ContextMenuStrip menu=new(){ShowImageMargin=false,ShowCheckMargin=true};
+    private readonly ModernContextMenu menu=new();
     private readonly ToolStripMenuItem countdown=new(){Enabled=false};
     private readonly ToolStripSeparator countdownSeparator=new();
     private readonly IAwakeLease lease;
@@ -144,6 +144,20 @@ internal sealed class TrayContext : ApplicationContext
         if(!session.Active || session.Deadline==null || !session.Countdown!.StartsWith("30m"))throw new Exception("Timer menu did not start a 30-minute session.");
         Refresh();if(icon.Text.StartsWith("agents on")!=true)throw new Exception("Wrong tray label.");
         session.Stop();Refresh();
+        foreach(var dark in new[]{false,true})
+        {
+            menu.PreviewTheme=ModernTheme.For(dark);
+            menu.Show(new Point(16,16));
+            Application.DoEvents();
+            var last=menu.Items[^1];
+            if(last.Placement!=ToolStripItemPlacement.Main || last.Bounds.Bottom>menu.ClientSize.Height)
+                throw new Exception("The timer menu clips its last option.");
+            foreach(ToolStripItem item in menu.Items)
+                if(item.Visible && item is ToolStripMenuItem && TextRenderer.MeasureText(item.Text,item.Font).Width+30*menu.DeviceDpi/96>item.Width)
+                    throw new Exception("A menu label does not fit its row: "+item.Text);
+            menu.Close();
+        }
+        menu.PreviewTheme=null;
         using var duration=new DurationForm();
         if(duration.ShowIcon)throw new Exception("Custom duration shows a placeholder icon.");
     }
@@ -225,28 +239,5 @@ internal sealed class TrayContext : ApplicationContext
             dispatch.Dispose();onIcon.Dispose();offIcon.Dispose();shutdown.Dispose();
         }
         base.Dispose(disposing);
-    }
-}
-
-internal sealed class DurationForm : Form
-{
-    private readonly TextBox hours=new(){Text="0",Width=145,AccessibleName="Hours"};
-    private readonly TextBox minutes=new(){Text="0",Width=145,AccessibleName="Minutes"};
-    private readonly Label error=new(){AutoSize=true,ForeColor=Color.Firebrick};
-    public TimeSpan Duration {get;private set;}
-    public DurationForm()
-    {
-        Text="Custom duration";ShowIcon=false;ShowInTaskbar=false;StartPosition=FormStartPosition.CenterScreen;
-        FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;ClientSize=new Size(390,220);
-        Controls.Add(new Label{Text="Keep Agents On for how long?",AutoSize=true,Location=new Point(20,20),Font=new Font((SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont).FontFamily,12,FontStyle.Bold)});
-        Controls.Add(new Label{Text="Hours",AutoSize=true,Location=new Point(20,65)});
-        Controls.Add(new Label{Text="Minutes",AutoSize=true,Location=new Point(210,65)});
-        hours.Location=new Point(20,90);minutes.Location=new Point(210,90);Controls.Add(hours);Controls.Add(minutes);
-        foreach(var field in new[]{hours,minutes}) field.Leave+=(_,_)=>{if(string.IsNullOrWhiteSpace(field.Text))field.Text="0";};
-        error.Location=new Point(20,127);Controls.Add(error);
-        var cancel=new Button{Text="Cancel",DialogResult=DialogResult.Cancel,Location=new Point(165,170),Size=new Size(85,30)};
-        var start=new Button{Text="Start timer",Location=new Point(260,170),Size=new Size(110,30)};
-        start.Click+=(_,_)=>{if(SessionController.ParseDuration(hours.Text,minutes.Text) is { } value){Duration=value;DialogResult=DialogResult.OK;Close();}else error.Text="Enter a valid duration greater than zero.";};
-        Controls.Add(cancel);Controls.Add(start);CancelButton=cancel;AcceptButton=start;
     }
 }
