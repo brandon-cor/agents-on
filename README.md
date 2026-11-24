@@ -163,6 +163,14 @@ The Windows workflow also runs the native tray/control smoke test and a real per
 
 Windows references: [keep-awake requests](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadexecutionstate), [lid-close actions](https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/power-button-and-lid-settings-lid-switch-close-action), [power-setting permissions](https://learn.microsoft.com/en-us/windows/win32/power/administrator-overrides), [why SMBIOS ThermalState is not live telemetry](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-computersystem).
 
+### Windows 11 release verification
+
+The published **v0.7.0** downloads passed on **Windows 11 Enterprise 25H2, build 26200.9974**: ARM64 natively and x64 through Windows' ARM64 emulation. Tests verified package integrity, native UI/keyboard controls, installation, on/off lid-policy changes and restoration, recovery after terminating the app, upgrade, and uninstall. Original power settings were restored. See the [successful run](https://github.com/brandon-cor/agents-on/actions/runs/45486019484) and [verification report](docs/testing/windows11-v0.7.0.json).
+
+This covers a Windows 11 VM, not native Intel/AMD Windows 11 hardware, physical laptop lid closure, or temperatures. Windows 11 26H2 was not directly tested.
+
+Maintainers can repeat the published-release checks from Actions by running `windows.yml` with `release_version` set to a published version. Leaving that input blank runs the normal build. The power-setting fixture refuses to run outside a disposable GitHub-hosted Windows 11 ARM64 runner.
+
 ## Build macOS from source
 
 Requires Apple's Xcode Command Line Tools (`xcode-select --install`):
