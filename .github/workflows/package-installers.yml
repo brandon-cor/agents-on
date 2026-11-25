@@ -1,0 +1,42 @@
+name: Package installer checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  npm-macos:
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check dependency-free npm installer logic
+        run: node --test packaging/npm/test/install.test.mjs
+      - name: Test the packed installer on a fresh Mac
+        run: bash scripts/check-npm-install-macos.sh
+  npm-windows11:
+    runs-on: windows-11-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check dependency-free npm installer logic
+        shell: pwsh
+        run: node --test packaging/npm/test/install.test.mjs
+      - name: Test the packed installer on Windows 11
+        shell: pwsh
+        run: ./scripts/check-npm-install.ps1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: Agents-On-npm-Windows11
+          path: dist/npm-windows11
+          if-no-files-found: error

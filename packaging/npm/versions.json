@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "platforms": {
+    "darwin": {
+      "release": "v0.5.0",
+      "installer": {
+        "file": "install-macos.sh",
+        "sha256": "3a33b8cf5d4172b6101f9341636a0352bb1f61e7f876803ea3d7fc62eec67b43"
+      },
+      "assets": {
+        "universal": {
+          "file": "Agents-On-macOS.zip",
+          "sha256": "b21b88eb9fdaa6f5d5dd003b4a3631aab4b67444db27428a27b9e79dd3d85a58",
+          "bytes": 179272
+        }
+      }
+    },
+    "win32": {
+      "release": "v0.7.0",
+      "installer": {
+        "file": "install-windows.ps1",
+        "sha256": "c7921135930d089af8b30d0871fa69206e443f027927a92c8376a2d50b03f663"
+      },
+      "assets": {
+        "x64": {
+          "file": "Agents-On-Windows-win-x64.zip",
+          "sha256": "8be376ffbd363f9ececa9b89917cc5e5039c81d157f0ab65a432b44d8f105917",
+          "bytes": 47457297
+        },
+        "arm64": {
+          "file": "Agents-On-Windows-win-arm64.zip",
+          "sha256": "91147bfa39edda637d23041c5c201027061b197296c65054542f2093d2499d69",
+          "bytes": 45291817
+        }
+      }
+    }
+  }
+}
