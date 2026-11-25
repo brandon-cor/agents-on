@@ -20,6 +20,12 @@ export function windowsPowerShell(env = process.env) {
   return path.win32.join(env.SystemRoot || env.WINDIR || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 }
 
+function windowsPowerShellEnvironment(env) {
+  // PowerShell 7 module paths break Windows PowerShell when inherited through Node.
+  // Let the child rebuild its defaults; keep execution-policy variables intact.
+  return Object.fromEntries(Object.entries(env).filter(([key]) => key.toUpperCase() !== 'PSMODULEPATH'));
+}
+
 export function inspectHost({ platform = process.platform, arch = process.arch, env = process.env, execute = spawnSync } = {}) {
   if (platform === 'darwin') {
     const result = execute('/usr/bin/sw_vers', ['-productVersion'], { encoding: 'utf8', windowsHide: true, shell: false });
@@ -28,7 +34,7 @@ export function inspectHost({ platform = process.platform, arch = process.arch, 
   }
   if (platform === 'win32') {
     const powershell = windowsPowerShell(env);
-    const result = execute(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', powershellHostQuery], { encoding: 'utf8', windowsHide: true, shell: false, timeout: 30_000 });
+    const result = execute(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', powershellHostQuery], { encoding: 'utf8', windowsHide: true, shell: false, timeout: 30_000, env: windowsPowerShellEnvironment(env) });
     if (result.error || result.status !== 0) throw new Error('Could not verify Windows 11. Open PowerShell and check that Windows system information is available.');
     let info;
     try { info = JSON.parse(result.stdout.trim()); } catch { throw new Error('Windows returned unreadable system information.'); }
@@ -93,7 +99,7 @@ export function installerInvocation(target, { directory, installerPath, archiveP
   return {
     command: target.powershell || windowsPowerShell(env),
     args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', installerPath, '-ArchivePath', archivePath],
-    options: { stdio: 'inherit', shell: false, env },
+    options: { stdio: 'inherit', shell: false, env: windowsPowerShellEnvironment(env) },
   };
 }
 

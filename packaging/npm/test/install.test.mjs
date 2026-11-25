@@ -116,12 +116,14 @@ test('Windows invokes a script file with literal path arguments and respects exe
   let calls = 0;
   await setup({ root: f.root, tempRoot: f.tempRoot }, {
     host: windows, fetchImpl: f.fetchImpl, log: () => {},
-    env: { SystemRoot: 'C:\\Windows root', agents_on_installer: 'untrusted', AGENTS_ON_ARCHIVE: 'untrusted', AgEnTs_On_ArChIvE: 'also untrusted' },
+    env: { SystemRoot: 'C:\\Windows root', PSModulePath: 'PowerShell 7 modules', psmodulepath: 'case variant', PSExecutionPolicyPreference: 'AllSigned' },
     run: async invocation => {
       calls++;
       assert.equal(invocation.command, 'C:\\Windows root\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
       assert.equal(invocation.options.shell, false);
       assert.ok(!invocation.args.some(arg => /ExecutionPolicy|Bypass|Unblock/i.test(arg)));
+      assert.ok(!Object.keys(invocation.options.env).some(key => key.toUpperCase() === 'PSMODULEPATH'));
+      assert.equal(invocation.options.env.PSExecutionPolicyPreference, 'AllSigned');
       assert.equal(invocation.args.length, 7);
       assert.deepEqual(invocation.args.slice(0, 4), ['-NoLogo', '-NoProfile', '-NonInteractive', '-File']);
       assert.equal(invocation.args[5], '-ArchivePath');
