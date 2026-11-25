@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const packageRoot = fileURLToPath(new URL('../', import.meta.url));
-const powershellHostQuery = '[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$o=Get-CimInstance Win32_OperatingSystem -ErrorAction Stop; @{productType=[int]$o.ProductType;build=[int]$o.BuildNumber;caption=$o.Caption;architecture=[Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()} | ConvertTo-Json -Compress';
+const powershellHostQuery = '[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$o=Get-CimInstance Win32_OperatingSystem -OperationTimeoutSec 10 -ErrorAction Stop; @{productType=[int]$o.ProductType;build=[int]$o.BuildNumber;caption=$o.Caption;architecture=[Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()} | ConvertTo-Json -Compress';
 
 export function parseArgs(args) {
   if (args.length === 0 || (args.length === 1 && args[0] === 'install')) return { command: 'install' };
@@ -34,8 +34,11 @@ export function inspectHost({ platform = process.platform, arch = process.arch, 
   }
   if (platform === 'win32') {
     const powershell = windowsPowerShell(env);
-    const result = execute(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', powershellHostQuery], { encoding: 'utf8', windowsHide: true, shell: false, timeout: 30_000, env: windowsPowerShellEnvironment(env) });
-    if (result.error || result.status !== 0) throw new Error('Could not verify Windows 11. Open PowerShell and check that Windows system information is available.');
+    const result = execute(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', powershellHostQuery], { encoding: 'utf8', windowsHide: true, shell: false, timeout: 90_000, env: windowsPowerShellEnvironment(env) });
+    if (result.error || result.status !== 0) {
+      const reason = result.error?.code || result.stderr?.trim().slice(0, 1000) || `exit ${result.status}`;
+      throw new Error(`Could not verify Windows 11 (${reason}). Open PowerShell and check that Windows system information is available.`);
+    }
     let info;
     try { info = JSON.parse(result.stdout.trim()); } catch { throw new Error('Windows returned unreadable system information.'); }
     const nativeArch = { arm64: 'arm64', x64: 'x64', amd64: 'x64' }[String(info.architecture).toLowerCase()];
