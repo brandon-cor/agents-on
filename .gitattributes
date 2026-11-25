@@ -1,0 +1,2 @@
+# Keep the checksum-pinned installer bytes identical on Windows and macOS.
+packaging/npm/bundled/* -text

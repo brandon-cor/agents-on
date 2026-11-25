@@ -6,6 +6,35 @@
 
 Left-click anywhere on the menu bar indicator to toggle **agents on** (bright green light) and **agents off** (dim white light). Turning on starts an indefinite session. Right-click opens timer options without toggling. No password on each toggle.
 
+## Quick install
+
+On **macOS 14 or newer**, with Homebrew:
+
+```sh
+brew install brandon-cor/tap/agents-on && agents-on install
+```
+
+Homebrew installs the command; the second step sets up the app, starts its menu bar indicator, and enables launch at login. Enter your Mac password once for setup. Later toggles do not need a password.
+
+On **macOS or Windows 11**, with Node.js 20 or newer:
+
+```sh
+npx --yes https://github.com/brandon-cor/agents-on/releases/download/v0.7.1/agents-on-0.7.1.tgz
+```
+
+This installs and starts the native app for your computer. Windows uses a tray icon near the clock, possibly inside the **^** overflow. On macOS, look for the **agents off/on** light and text in the menu bar. Choose one installation method; the original installers below also work without Node.js or Homebrew.
+
+To keep the npm command installed:
+
+```sh
+npm install -g https://github.com/brandon-cor/agents-on/releases/download/v0.7.1/agents-on-0.7.1.tgz
+agents-on install
+```
+
+Installing the npm package alone does not set up the app. It has no dependencies or automatic installation hooks. Both package-manager options use pinned app releases and verify their checksums. The installer wrapper is version 0.7.1; the app versions remain macOS 0.5.0 and Windows 0.7.0.
+
+After `brew upgrade`, run `agents-on install` to update the app. For npm, use the package URL from the latest installer release, or update the global package and run setup again. Homebrew's `agents-on verify` and npm's `agents-on --check` verify the download without setting up the app.
+
 ## Install on Windows
 
 For **Windows 11**, on Intel/AMD x64 or ARM64. The app includes its runtime; no .NET installation or administrator prompt is normally needed.

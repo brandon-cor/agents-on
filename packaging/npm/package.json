@@ -1,0 +1,15 @@
+{
+  "name": "agents-on",
+  "version": "0.7.1",
+  "description": "Install the Agents On menu bar or Windows tray app for keeping your computer awake.",
+  "type": "module",
+  "bin": { "agents-on": "bin/agents-on.mjs" },
+  "files": ["bin/", "lib/", "bundled/", "versions.json", "README.md", "LICENSE"],
+  "scripts": { "test": "node --test" },
+  "engines": { "node": ">=20" },
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/brandon-cor/agents-on.git", "directory": "packaging/npm" },
+  "homepage": "https://github.com/brandon-cor/agents-on#readme",
+  "bugs": { "url": "https://github.com/brandon-cor/agents-on/issues" },
+  "keywords": ["agents", "keep-awake", "macos", "windows", "tray"]
+}

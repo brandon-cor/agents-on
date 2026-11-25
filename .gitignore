@@ -1,6 +1,7 @@
 dist/
 .DS_Store
 **/bin/
+!packaging/npm/bin/
 **/obj/
 
 # Keep local credentials out of public commits.
