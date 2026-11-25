@@ -33,4 +33,10 @@ npm exec --yes --package "$package" -- agents-on install
 [[ ! -e "$app" && ! -e "$HOME/Library/LaunchAgents/io.github.brandon-cor.agents-on.plist" ]] || {
   echo 'Uninstall did not remove the app and login item.' >&2; exit 1
 }
+mkdir -p dist/npm-package
+cp "$package" dist/npm-package/
+(
+  cd dist/npm-package
+  /usr/bin/shasum -a 256 agents-on-0.7.1.tgz > SHA256SUMS
+)
 echo 'Packed npm installer: Mac verification, setup, menu bar startup, update, and uninstall passed.'

@@ -21,6 +21,11 @@ jobs:
         run: node --test packaging/npm/test/install.test.mjs
       - name: Test the packed installer on a fresh Mac
         run: bash scripts/check-npm-install-macos.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Agents-On-npm-installer
+          path: dist/npm-package
+          if-no-files-found: error
   npm-windows11:
     runs-on: windows-11-arm
     timeout-minutes: 15
